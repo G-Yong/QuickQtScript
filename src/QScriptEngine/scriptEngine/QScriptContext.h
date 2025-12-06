@@ -1,0 +1,61 @@
+﻿#pragma once
+
+#include <QString>
+#include <QStringList>
+#include <vector>
+
+extern "C" {
+#include "../quickjs/quickjs.h"
+}
+
+class QScriptEngine;
+class QScriptValue;
+
+class QScriptContext
+{
+public:
+    enum ExecutionState {
+        NormalState,
+        ExceptionState
+    };
+
+    enum Error {
+        UnknownError,
+        ReferenceError,
+        SyntaxError,
+        TypeError,
+        RangeError,
+        URIError
+    };
+
+    QScriptContext(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, QScriptEngine *engine);
+    ~QScriptContext();
+
+    QScriptValue activationObject() const;
+    QScriptValue argumentsObject() const;
+    QScriptValue callee() const;
+    bool isCalledAsConstructor() const;
+    QScriptContext *parentContext() const;
+    void setActivationObject(const QScriptValue &activation);
+    void setThisObject(const QScriptValue &thisObject);
+
+
+    QScriptContext::ExecutionState state() const;
+
+    QScriptValue argument(int index) const;
+    int argumentCount() const;
+    QStringList backtrace() const;
+    QScriptEngine *engine() const;
+    QScriptValue thisObject() const;
+    QScriptValue throwError(QScriptContext::Error error, const QString &text);
+    QScriptValue throwError(const QString &text);
+    QScriptValue throwValue(const QScriptValue &value);
+    QString toString() const;
+
+private:
+    JSContext *m_ctx{nullptr};
+    JSValue m_this{JS_UNDEFINED};
+    JSValue m_activation{JS_UNDEFINED};
+    std::vector<JSValue> m_args;
+    QScriptEngine *m_engine{nullptr};
+};
