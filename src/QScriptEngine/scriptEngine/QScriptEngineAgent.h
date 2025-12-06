@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include <QString>
+#include <QMap>
 
 class QScriptEngine;
 class QScriptContext;
@@ -26,6 +27,16 @@ public:
     virtual void scriptUnload(qint64 id);
     // virtual bool supportsExtension(QScriptEngineAgent::Extension extension) const;
 
+
+    // 以下接口内部使用，外部不要使用
+    bool isPosChanged(qint64 line, qint64 col);
+    qint64 scriptId(QString fileName);
+
 private:
     QScriptEngine *m_engine{nullptr};
+
+    QMap<QString, qint64> mIdMap;
+
+    qint64 mLastLine;
+    qint64 mLastCol;
 };

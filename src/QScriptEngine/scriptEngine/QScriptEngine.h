@@ -3,6 +3,9 @@
 #include <QObject>
 #include <QString>
 #include <QStringList>
+#include <QSet>
+#include <QMutex>
+
 #include <atomic>
 #include <vector>
 #include <mutex>
@@ -95,6 +98,12 @@ public:
     // 中断标志，用于打断执行
     std::atomic_int interrupt_flag = 0;
 
+public:
+    int registerNativeFunction(FunctionWithArgSignature signature, void *arg);
+    bool getNativeEntry(int idx, FunctionWithArgSignature &outFunc, void **outArg) const;
+    QObject *qobjectFromJSValue(JSContext *ctx, JSValueConst val) const;
+    JSClassID qObjectClassId() const { return m_qobjectClassId; }
+
 private:
     JSRuntime *m_rt{nullptr};
     JSContext *m_ctx{nullptr};
@@ -108,11 +117,8 @@ private:
     std::vector<NativeFunctionEntry> m_nativeFunctions;
     mutable std::mutex m_nativeFunctionsMutex;
 
-public:
-    int registerNativeFunction(FunctionWithArgSignature signature, void *arg);
-    bool getNativeEntry(int idx, FunctionWithArgSignature &outFunc, void **outArg) const;
-    QObject *qobjectFromJSValue(JSContext *ctx, JSValueConst val) const;
-    JSClassID qObjectClassId() const { return m_qobjectClassId; }
+    // 为engienAgent提供scriptID;
+    QStringList mFileNameBuffer;
 };
 
 Q_DECLARE_OPERATORS_FOR_FLAGS(QScriptEngine::QObjectWrapOptions)

@@ -1,4 +1,4 @@
-/*
+﻿/*
  * QuickJS Javascript Engine
  *
  * Copyright (c) 2017-2024 Fabrice Bellard
@@ -468,6 +468,15 @@ JS_EXTERN JSRuntime *JS_GetRuntime(JSContext *ctx);
 JS_EXTERN void JS_SetClassProto(JSContext *ctx, JSClassID class_id, JSValue obj);
 JS_EXTERN JSValue JS_GetClassProto(JSContext *ctx, JSClassID class_id);
 JS_EXTERN JSValue JS_GetFunctionProto(JSContext *ctx);
+
+typedef int JSOPChangedHandler(uint8_t op,
+                               const char *filename,
+                               const char *funcname,
+                               int line,
+                               int col,
+                               void *opaque);
+JS_EXTERN void JS_SetOPChangedHandler(JSContext *ctx, JSOPChangedHandler *cb, void *opaque);
+
 
 /* the following functions are used to select the intrinsic object to
    save memory */

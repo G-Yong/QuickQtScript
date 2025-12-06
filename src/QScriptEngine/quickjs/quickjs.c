@@ -1,4 +1,4 @@
-/*
+﻿/*
  * QuickJS Javascript Engine
  *
  * Copyright (c) 2017-2025 Fabrice Bellard
@@ -486,6 +486,17 @@ struct JSContext {
                              const char *input, size_t input_len,
                              const char *filename, int line, int flags, int scope_idx);
     void *user_opaque;
+
+    // 添加的回调函数
+    int (*operation_changed)(uint8_t op,
+                             const char *filename,
+                             const char *funcname,
+                             int line,
+                             int col,
+                             void *opaque
+                             );
+    void *oc_opaque;
+
 };
 
 typedef union JSFloat64Union {
@@ -2391,6 +2402,9 @@ JSContext *JS_NewContext(JSRuntime *rt)
 
     JS_AddPerformance(ctx);
 
+    ctx->operation_changed = NULL;
+    ctx->oc_opaque = NULL;
+
     return ctx;
 }
 
@@ -2429,6 +2443,12 @@ JSValue JS_GetClassProto(JSContext *ctx, JSClassID class_id)
 JSValue JS_GetFunctionProto(JSContext *ctx)
 {
     return js_dup(ctx->function_proto);
+}
+
+void JS_SetOPChangedHandler(JSContext *ctx, JSOPChangedHandler *cb, void *opaque)
+{
+    ctx->operation_changed = cb;
+    ctx->oc_opaque = opaque;
 }
 
 typedef enum JSFreeModuleEnum {
@@ -16333,6 +16353,34 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
     for(;;) {
         int call_argc;
         JSValue *call_argv;
+
+        // 添加的代码
+        {
+            if (b && ctx->operation_changed != NULL) {
+                int col_num = 0;
+                int line_num = -1;
+                const char *filename = NULL;
+                const char *funcname = NULL;
+
+                uint32_t pc_index = (uint32_t)(pc - b->byte_code_buf - 1);
+                line_num = find_line_num(ctx, b, pc_index, &col_num);
+                filename = b->filename  ? JS_AtomToCString(ctx, b->filename) : NULL;
+                funcname = b->func_name ? JS_AtomToCString(ctx, b->func_name) : NULL;
+
+                int ret = 0;
+                ret = ctx->operation_changed(*pc, filename, funcname, line_num, col_num, ctx->oc_opaque);
+                if (filename) {
+                    // fprintf(stderr, "op:%d %d at %s %s:%d:%d\n", *pc, OP_return, funcname, filename, line_num, col_num);
+                    JS_FreeCString(ctx, filename);
+                    JS_FreeCString(ctx, funcname);
+                }
+
+                if(ret != 0)
+                {
+                    goto exception;
+                }
+            }
+        }
 
         SWITCH(pc) {
         CASE(OP_push_i32):

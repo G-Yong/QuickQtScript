@@ -13,10 +13,12 @@ CONFIG += c++17
 
 SOURCES += \
     main.cpp \
-    mainwindow.cpp
+    mainwindow.cpp \
+    myscriptengineagent.cpp
 
 HEADERS += \
-    mainwindow.h
+    mainwindow.h \
+    myscriptengineagent.h
 
 FORMS += \
     mainwindow.ui

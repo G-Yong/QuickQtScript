@@ -1,6 +1,7 @@
-﻿#include "QScriptEngine.h"
-#include "QScriptValue.h"
-#include "QScriptContext.h"
+﻿#include <QScriptEngine.h>
+#include <QScriptValue.h>
+#include <QScriptContext.h>
+#include <QScriptEngineAgent>
 
 #include <QDebug>
 
@@ -124,7 +125,6 @@ QScriptEngine::QScriptEngine(QObject *parent)
 
     // 重置中断标志
     std::atomic_store(&interrupt_flag, 0);
-
     // 设置中断处理器
     JS_SetInterruptHandler(m_rt, custom_interrupt_handler, this);
 
@@ -142,6 +142,13 @@ QScriptEngine::QScriptEngine(QObject *parent)
 
 QScriptEngine::~QScriptEngine()
 {
+    if(agent() != nullptr)
+    {
+        for (int i = 0; i < mFileNameBuffer.length(); ++i) {
+            agent()->scriptUnload(i);
+        }
+    }
+
     if (m_ctx) {
         // JS_RunGC(m_rt);
 
@@ -195,6 +202,13 @@ QScriptValue QScriptEngine::evaluate(const QString &program, const QString &file
 {
     if (!m_ctx)
         return QScriptValue();
+
+    mFileNameBuffer.push_back(fileName);
+    if(agent() != nullptr)
+    {
+        agent()->scriptLoad(mFileNameBuffer.length() - 1, program, fileName, lineNumber);
+    }
+
     struct EvalGuard {
         std::atomic<int> &cnt;
         EvalGuard(std::atomic<int> &c) : cnt(c) { cnt.fetch_add(1, std::memory_order_relaxed); }

@@ -3,6 +3,15 @@
 
 #include <QDebug>
 
+#include "myscriptengineagent.h"
+
+QScriptValue funcPrint(QScriptContext *contex, QScriptEngine *engine, void *data)
+{
+    qDebug() << "print-->:" << contex->argument(0).toVariant();
+
+    return QScriptValue();
+}
+
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
@@ -10,12 +19,22 @@ MainWindow::MainWindow(QWidget *parent)
     ui->setupUi(this);
 
     QScriptEngine engine;
+    MyScriptEngineAgent engineAgent(&engine);
+    engine.setAgent(&engineAgent);
+
+    engine.globalObject().setProperty("print", engine.newFunction(funcPrint, this));
 
     QString scriptStr =
 R"(var a = 10;
+print(2)
+print(3)
+print(4)
 var b = 100;
-a + b
-sd9
+var c = a+b
+/*function add(a, b){
+return a + b;
+}
+add(a,b)*/
 )";
 
     QScriptValue result;
