@@ -1,4 +1,7 @@
-QT       += core gui
+QT       += core gui concurrent
+
+# QT += script
+include($$PWD/../../src/QScriptEngine/ScriptEngine.pri)
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 

@@ -3,6 +3,11 @@
 
 #include <QMainWindow>
 
+#include <QDebug>
+#include <QScriptEngine>
+#include <QScriptEngineAgent>
+
+
 QT_BEGIN_NAMESPACE
 namespace Ui {
 class MainWindow;
