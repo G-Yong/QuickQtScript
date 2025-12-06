@@ -4,7 +4,7 @@
 # 介绍
 本项目是基于QuickJS（[准确说是QuickJS-NG](https://github.com/quickjs-ng/quickjs/tree/v0.11.0)）v0.11.0实现的QtScript的部分接口，基本满足普通使用。更高级的功能后面会慢慢补全。
 
-本项目的基本目的是让使用了QtScript编写的上层代码<big>零改动</big>就能将底层引擎迁移到QuickJS
+本项目的基本目的是，让使用了QtScript编写的上层代码**零改动**就能将底层引擎从自带的引擎迁移到QuickJS引擎。
 
 # 使用
 使用（切换）起来非常方便。在`src/QScriptEngine`下有个`ScriptEngine.pri`文件。在你项目的`.pro`文件中引入即可。
