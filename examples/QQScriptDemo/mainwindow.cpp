@@ -2,6 +2,7 @@
 #include "ui_mainwindow.h"
 
 #include <QDebug>
+#include <QtConcurrentRun>
 
 #include "myscriptengineagent.h"
 
@@ -22,20 +23,35 @@ MainWindow::MainWindow(QWidget *parent)
     MyScriptEngineAgent engineAgent(&engine);
     engine.setAgent(&engineAgent);
 
+    QtConcurrent::run([&](){
+        QThread::msleep(1000);
+        engine.abortEvaluation();
+    });
+
     engine.globalObject().setProperty("print", engine.newFunction(funcPrint, this));
 
     QString scriptStr =
-R"(var a = 10;
-print(2)
-print(3)
-print(4)
-var b = 100;
-var c = a+b
-/*function add(a, b){
-return a + b;
+// R"(var a = 10;
+// print(2)
+// print(3)
+// print(4)
+// var b = 100;
+// var c = a+b
+// /*function add(a, b){
+// return a + b;
+// }
+// add(a,b)*/
+// )"
+
+R"(
+while(1)
+{
+var a = 0;
+a++;
 }
-add(a,b)*/
-)";
+)"
+
+        ;
 
     QScriptValue result;
     result = engine.evaluate(scriptStr, "main.js");

@@ -84,14 +84,17 @@ int scriptOPChanged(uint8_t op,
 
     int scriptId = agent->scriptId(fileName);
 
+    // 按照测试，尝试出来的，原理不明
     if(op != QJDefines::OP_check_define_var &&
-        op != QJDefines::OP_put_var
+        op != QJDefines::OP_put_var &&
+        op != QJDefines::OP_leave_scope &&
+        op != QJDefines::OP_push_7
         )
     {
         // 不能每次op变动都调用一次，要行列号变化才调用
         if(agent->isPosChanged(line, col))
         {
-            qDebug() << "script id:" << scriptId << fileName;
+            // qDebug() << "script id:" << scriptId << fileName << line << col;
             agent->positionChange(scriptId, line, col);
         }
     }
