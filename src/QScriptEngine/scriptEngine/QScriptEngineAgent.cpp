@@ -58,38 +58,8 @@
 // apply：将数组作为参数调用（Function.apply）。
 // nop：空操作（占位）。
 
-typedef enum OPCodeFormat {
-#define FMT(f) OP_FMT_ ## f,
-#define DEF(id, size, n_pop, n_push, f)
-#include "../quickjs/quickjs-opcode.h"
-#undef DEF
-#undef FMT
-} OPCodeFormat;
 
-typedef enum OPCodeEnum {
-#define FMT(f)
-#define DEF(id, size, n_pop, n_push, f) OP_ ## id,
-#define def(id, size, n_pop, n_push, f)
-#include "../quickjs/quickjs-opcode.h"
-#undef def
-#undef DEF
-#undef FMT
-    OP_COUNT, /* excluding temporary opcodes */
-    /* temporary opcodes : overlap with the short opcodes */
-    OP_TEMP_START = OP_nop + 1,
-    OP___dummy = OP_TEMP_START - 1,
-#define FMT(f)
-#define DEF(id, size, n_pop, n_push, f)
-#define def(id, size, n_pop, n_push, f) OP_ ## id,
-#include "../quickjs/quickjs-opcode.h"
-#undef def
-#undef DEF
-#undef FMT
-    OP_TEMP_END,
-} OPCodeEnum;
-
-
-// QuickJs执行函数时，是按需执行的，没有用到的代码会直接跳过
+// QuickJs执行函数时，是按需执行的，没有用到的代码会直接跳过(也有可能是目前获取行号的逻辑有问题)
 // 而Qt原生的，好像每一行代码都会执行
 int scriptOPChanged(uint8_t op,
                     const char *fileName,
@@ -106,7 +76,7 @@ int scriptOPChanged(uint8_t op,
     // qDebug() << OP_call << OP_return;
 
     // qDebug() << "op changed:"
-    //          << op
+    //          << (QJDefines::OPCodeEnum)op
     //          << fileName
     //          << funcName
     //          << line
@@ -114,26 +84,32 @@ int scriptOPChanged(uint8_t op,
 
     int scriptId = agent->scriptId(fileName);
 
-    // 不能每次op变动都调用一次，要行列号变化才调用
-    if(agent->isPosChanged(line, col))
+    if(op != QJDefines::OP_check_define_var &&
+        op != QJDefines::OP_put_var
+        )
     {
-        qDebug() << "code:" << op;
-        agent->positionChange(scriptId, line, col);
+        // 不能每次op变动都调用一次，要行列号变化才调用
+        if(agent->isPosChanged(line, col))
+        {
+            qDebug() << "script id:" << scriptId << fileName;
+            agent->positionChange(scriptId, line, col);
+        }
     }
 
     switch(op)
     {
-    case OP_call0:
-    case OP_call1:
-    case OP_call2:
-    case OP_call3:
-    case OP_call:{
+    case QJDefines::OP_call0:
+    case QJDefines::OP_call1:
+    case QJDefines::OP_call2:
+    case QJDefines::OP_call3:
+    case QJDefines::OP_call:{
         agent->functionEntry(scriptId);
     };break;
-    case OP_return_undef:
-    case OP_return_async:
-    case OP_return:{
-        agent->functionExit(scriptId, QScriptValue());
+    case QJDefines::OP_return_undef:
+    case QJDefines::OP_return_async:
+    case QJDefines::OP_return:{
+        // 这个有问题，会有一次额外的进入
+        // agent->functionExit(scriptId, QScriptValue());
     };break;
     }
 
@@ -201,9 +177,7 @@ void QScriptEngineAgent::positionChange(qint64 scriptId, int lineNumber, int col
 
 void QScriptEngineAgent::scriptLoad(qint64 id, const QString &program, const QString &fileName, int baseLineNumber)
 {
-    mIdMap.insert(fileName, id);
-
-    // qDebug() << "script load" << id << fileName;
+    // qDebug() << "script load:" << id << fileName;
 }
 
 void QScriptEngineAgent::scriptUnload(qint64 id)
@@ -227,10 +201,16 @@ bool QScriptEngineAgent::isPosChanged(qint64 line, qint64 col)
 
 qint64 QScriptEngineAgent::scriptId(QString fileName)
 {
-    return mIdMap[fileName];
+    if(engine() == nullptr)
+    {
+        return -1;
+    }
+
+    return engine()->fileNameBuffer().indexOf(fileName);
 }
 
 // bool QScriptEngineAgent::supportsExtension(QScriptEngineAgent::Extension extension) const
 // {
 
 // }
+

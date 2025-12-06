@@ -70,6 +70,12 @@ static JSValue nativeFunctionShim(JSContext *ctx,
     if (!engine)
         return JS_UNDEFINED;
 
+    // 检查中断标志
+    if (std::atomic_load(&engine->interrupt_flag)) {
+        auto value = JS_ThrowTypeError(ctx, "%s", "stop");
+        return value;
+    }
+
     QScriptEngine::FunctionWithArgSignature func = nullptr;
     void *arg = nullptr;
     if (!engine->getNativeEntry(magic, func, &arg))
@@ -144,9 +150,10 @@ QScriptEngine::~QScriptEngine()
 {
     if(agent() != nullptr)
     {
-        for (int i = 0; i < mFileNameBuffer.length(); ++i) {
-            agent()->scriptUnload(i);
-        }
+        // 这里会导致程序崩溃，后面再处理
+        // for (int i = 0; i < mFileNameBuffer.length(); ++i) {
+        //     agent()->scriptUnload(i);
+        // }
     }
 
     if (m_ctx) {

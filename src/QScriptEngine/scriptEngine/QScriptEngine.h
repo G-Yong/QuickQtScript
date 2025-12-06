@@ -98,6 +98,10 @@ public:
     // 中断标志，用于打断执行
     std::atomic_int interrupt_flag = 0;
 
+    QStringList fileNameBuffer(){
+        return mFileNameBuffer;
+    }
+
 public:
     int registerNativeFunction(FunctionWithArgSignature signature, void *arg);
     bool getNativeEntry(int idx, FunctionWithArgSignature &outFunc, void **outArg) const;
