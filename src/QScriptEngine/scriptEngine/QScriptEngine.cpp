@@ -364,7 +364,7 @@ QScriptValue QScriptEngine::globalObject() const
 
     QScriptValue qVal = QScriptValue(m_ctx, g, const_cast<QScriptEngine*>(this));
 
-    // JS_FreeValue(m_ctx, g);
+    JS_FreeValue(m_ctx, g);
 
     return qVal;
 }
