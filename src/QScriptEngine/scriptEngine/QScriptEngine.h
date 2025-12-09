@@ -125,6 +125,8 @@ private:
 
     // 为engienAgent提供scriptID;
     QStringList mFileNameBuffer;
+
+    QScriptContext *mCurCtx{nullptr};
 };
 
 Q_DECLARE_OPERATORS_FOR_FLAGS(QScriptEngine::QObjectWrapOptions)
