@@ -1,6 +1,6 @@
-﻿#include <QScriptEngine.h>
-#include <QScriptValue.h>
-#include <QScriptContext.h>
+﻿#include "QScriptEngine.h"
+#include <QScriptValue>
+#include <QScriptContext>
 #include <QScriptEngineAgent>
 #include <QMetaProperty>
 
@@ -349,7 +349,7 @@ QScriptValue QScriptEngine::globalObject() const
 
     QScriptValue qVal = QScriptValue(m_ctx, g, const_cast<QScriptEngine*>(this));
 
-    JS_FreeValue(m_ctx, g);
+    // JS_FreeValue(m_ctx, g);
 
     return qVal;
 }
