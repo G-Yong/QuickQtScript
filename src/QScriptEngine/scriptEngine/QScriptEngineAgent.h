@@ -1,4 +1,5 @@
-﻿#pragma once
+﻿#ifndef QSCRIPTENGINE_QSCRIPTENGINEAGENT_H
+#define QSCRIPTENGINE_QSCRIPTENGINEAGENT_H
 
 #include <QString>
 #include <QMap>
@@ -320,5 +321,8 @@ public:
     {
 
     }
+
 };
+
+#endif // QSCRIPTENGINE_QSCRIPTENGINEAGENT_H
 

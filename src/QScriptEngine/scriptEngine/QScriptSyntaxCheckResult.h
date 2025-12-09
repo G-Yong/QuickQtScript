@@ -1,4 +1,5 @@
-﻿#pragma once
+﻿#ifndef QSCRIPTENGINE_QSCRIPTSYNTAXCHECKRESULT_H
+#define QSCRIPTENGINE_QSCRIPTSYNTAXCHECKRESULT_H
 
 #include <QString>
 
@@ -35,3 +36,5 @@ private:
     int m_errorLine{-1};
     int m_errorColumn{-1};
 };
+
+#endif // QSCRIPTENGINE_QSCRIPTSYNTAXCHECKRESULT_H

@@ -1,4 +1,5 @@
-﻿#pragma once
+﻿#ifndef QSCRIPTENGINE_QSCRIPTCONTEXT_H
+#define QSCRIPTENGINE_QSCRIPTCONTEXT_H
 
 #include <QString>
 #include <QStringList>
@@ -58,4 +59,7 @@ private:
     JSValue m_activation{JS_UNDEFINED};
     std::vector<JSValue> m_args;
     QScriptEngine *m_engine{nullptr};
+
 };
+
+#endif // QSCRIPTENGINE_QSCRIPTCONTEXT_H

@@ -1,4 +1,5 @@
-﻿#pragma once
+﻿#ifndef QSCRIPTENGINE_QSCRIPTVALUE_H
+#define QSCRIPTENGINE_QSCRIPTVALUE_H
 
 #include <QtGlobal>
 #include <QString>
@@ -123,3 +124,5 @@ private:
 // 添加这行宏声明，启用 Flags 的按位或运算符
 Q_DECLARE_OPERATORS_FOR_FLAGS(QScriptValue::ResolveFlags)
 Q_DECLARE_OPERATORS_FOR_FLAGS(QScriptValue::PropertyFlags)
+
+#endif // QSCRIPTENGINE_QSCRIPTVALUE_H

@@ -1,4 +1,4 @@
-﻿#include "QScriptEngine.h"
+﻿#include <QScriptEngine>
 #include <QScriptValue>
 #include <QScriptContext>
 #include <QScriptEngineAgent>

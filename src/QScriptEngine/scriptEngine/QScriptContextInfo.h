@@ -1,4 +1,5 @@
-#pragma once
+#ifndef QSCRIPTENGINE_QSCRIPTCONTEXTINFO_H
+#define QSCRIPTENGINE_QSCRIPTCONTEXTINFO_H
 
 #include <QString>
 
@@ -30,3 +31,5 @@ private:
     int m_column{0};
     QString m_functionName;
 };
+
+#endif // QSCRIPTENGINE_QSCRIPTCONTEXTINFO_H

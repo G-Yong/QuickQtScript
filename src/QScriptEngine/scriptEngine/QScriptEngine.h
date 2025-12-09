@@ -1,4 +1,5 @@
-﻿#pragma once
+﻿#ifndef QSCRIPTENGINE_QSCRIPTENGINE_H
+#define QSCRIPTENGINE_QSCRIPTENGINE_H
 
 #include <QObject>
 #include <QString>
@@ -129,4 +130,7 @@ private:
     QScriptContext *mCurCtx{nullptr};
 };
 
+
 Q_DECLARE_OPERATORS_FOR_FLAGS(QScriptEngine::QObjectWrapOptions)
+
+#endif // QSCRIPTENGINE_QSCRIPTENGINE_H

@@ -1,4 +1,5 @@
-#pragma once
+#ifndef QSCRIPTENGINE_QSCRIPTVALUEITERATOR_H
+#define QSCRIPTENGINE_QSCRIPTVALUEITERATOR_H
 
 #include <QString>
 #include "QScriptValue.h"
@@ -25,3 +26,5 @@ private:
     uint32_t m_index{0};
     JSAtom m_currentAtom{0};
 };
+
+#endif // QSCRIPTENGINE_QSCRIPTVALUEITERATOR_H
