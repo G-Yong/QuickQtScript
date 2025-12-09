@@ -1,6 +1,7 @@
 ﻿#include "myscriptengineagent.h"
 #include <QDebug>
 
+#include <QScriptEngine>
 
 MyScriptEngineAgent::MyScriptEngineAgent(QScriptEngine *engine) :
     QScriptEngineAgent(engine)
@@ -40,12 +41,17 @@ void MyScriptEngineAgent::functionExit(qint64 scriptId, const QScriptValue &retu
 
 void MyScriptEngineAgent::positionChange(qint64 scriptId, int lineNumber, int columnNumber)
 {
-    qDebug() << "position changed:" << scriptId << lineNumber << columnNumber;
+    qDebug() << "agent position changed:" << scriptId << lineNumber << columnNumber;
 }
 
 void MyScriptEngineAgent::exceptionThrow(qint64 scriptId, const QScriptValue &exception, bool hasHandler)
 {
+    // 需要实现这个，
+    // engine()->currentContext()->backtrace();
 
+    qDebug() << "agent exception throw" << exception.toString();
+
+    // emit exceptionOccur(engine()->currentContext()->backtrace(), exception.toString());
 }
 
 void MyScriptEngineAgent::exceptionCatch(qint64 scriptId, const QScriptValue &exception)

@@ -6,6 +6,8 @@
 
 #include "myscriptengineagent.h"
 
+#include "myqobject.h"
+
 QScriptValue funcPrint(QScriptContext *contex, QScriptEngine *engine, void *data)
 {
     qDebug() << "print-->:" << contex->argument(0).toVariant();
@@ -30,7 +32,8 @@ MainWindow::MainWindow(QWidget *parent)
     // });
 
     // 测试QObject
-    QObject qObj;
+    // 存在重大问题，暂时不要使用此功能
+    MyQObject qObj;
     qObj.setObjectName("this is qObj");
     qDebug() << "obj name:" << qObj.objectName();
     auto jsQObj = engine.newQObject(&qObj);
@@ -40,9 +43,10 @@ MainWindow::MainWindow(QWidget *parent)
     engine.globalObject().setProperty("print", engine.newFunction(funcPrint, this));
 
     QString scriptStr =
-R"(var a = 10;
+R"(var a = 10; jkg%^
 qObj.objectName = '789abc'
 print(qObj.objectName)
+print(qObj.myFunc('tyhjk'))
 print(2)
 print(3)
 print(4)
@@ -63,6 +67,13 @@ add(a,b)*/
 // )"
 
         ;
+
+    // auto chkRet = engine.checkSyntax(scriptStr);
+    // qDebug() << "result:"
+    //          << chkRet.errorLineNumber()
+    //          << chkRet.errorColumnNumber()
+    //          << chkRet.errorMessage();
+    // return;
 
     QScriptValue result;
     result = engine.evaluate(scriptStr, "main.js");

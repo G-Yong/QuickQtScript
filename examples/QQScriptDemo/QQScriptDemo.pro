@@ -14,10 +14,12 @@ CONFIG += c++17
 SOURCES += \
     main.cpp \
     mainwindow.cpp \
+    myqobject.cpp \
     myscriptengineagent.cpp
 
 HEADERS += \
     mainwindow.h \
+    myqobject.h \
     myscriptengineagent.h
 
 FORMS += \

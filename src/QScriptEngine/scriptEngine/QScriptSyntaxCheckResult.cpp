@@ -1,7 +1,7 @@
-#include "QScriptSyntaxCheckResult.h"
+﻿#include "QScriptSyntaxCheckResult.h"
 // Implementation of QScriptSyntaxCheckResult with Qt-compatible API
 QScriptSyntaxCheckResult::QScriptSyntaxCheckResult()
-    : m_state(NoError), m_errorLine(-1), m_errorColumn(-1)
+    : m_state(Valid), m_errorLine(-1), m_errorColumn(-1)
 {
 }
 
@@ -48,14 +48,14 @@ QScriptSyntaxCheckResult::State QScriptSyntaxCheckResult::state() const
     return m_state;
 }
 
-QString QScriptSyntaxCheckResult::toString() const
-{
-    if (m_state == NoError)
-        return QString();
-    if (m_errorLine >= 0) {
-        if (m_errorColumn >= 0)
-            return QString("%1 at %2:%3").arg(m_errorMessage).arg(m_errorLine).arg(m_errorColumn);
-        return QString("%1 at %2").arg(m_errorMessage).arg(m_errorLine);
-    }
-    return m_errorMessage;
-}
+// QString QScriptSyntaxCheckResult::toString() const
+// {
+//     if (m_state == NoError)
+//         return QString();
+//     if (m_errorLine >= 0) {
+//         if (m_errorColumn >= 0)
+//             return QString("%1 at %2:%3").arg(m_errorMessage).arg(m_errorLine).arg(m_errorColumn);
+//         return QString("%1 at %2").arg(m_errorMessage).arg(m_errorLine);
+//     }
+//     return m_errorMessage;
+// }

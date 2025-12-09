@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <QString>
 
@@ -6,8 +6,9 @@ class QScriptSyntaxCheckResult
 {
 public:
     enum State {
-        NoError,
-        Error
+        Error,
+        Intermediate,
+        Valid
     };
 
     QScriptSyntaxCheckResult();
@@ -23,13 +24,13 @@ public:
     QScriptSyntaxCheckResult::State state() const;
 
     // compatibility helpers
-    bool isValid() const { return state() == NoError; }
+    bool isValid() const { return state() == Valid; }
     int errorLine() const { return errorLineNumber(); }
     int errorColumn() const { return errorColumnNumber(); }
-    QString toString() const;
+    // QString toString() const;
 
 private:
-    QScriptSyntaxCheckResult::State m_state{NoError};
+    QScriptSyntaxCheckResult::State m_state{Valid};
     QString m_errorMessage;
     int m_errorLine{-1};
     int m_errorColumn{-1};

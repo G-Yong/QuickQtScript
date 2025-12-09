@@ -75,6 +75,7 @@ public:
     QScriptValue newVariant(const QVariant &value);
     QScriptValue newVariant(const QScriptValue &object, const QVariant &value);
 
+    // 目前这两个函数还存在重大隐患，暂时不建议使用
     QScriptValue newQObject(QObject *object, QScriptEngine::ValueOwnership ownership = QtOwnership, const QScriptEngine::QObjectWrapOptions &options = QObjectWrapOptions());
     QScriptValue newQObject(const QScriptValue &scriptObject, QObject *qtObject, QScriptEngine::ValueOwnership ownership = QtOwnership, const QScriptEngine::QObjectWrapOptions &options = QObjectWrapOptions());
 

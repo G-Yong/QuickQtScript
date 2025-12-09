@@ -31,12 +31,65 @@ struct ObjectProp
         return prop.write(object, var);
     }
 };
+struct ObjectMethod
+{
+    QObject *object = nullptr;
+    QMetaMethod method;
+
+    QVariant invoke(QList<QGenericArgument> argList)
+    {
+        bool success = false;
+
+        QString var;
+        QGenericReturnArgument retVal = Q_RETURN_ARG(QString, var);
+
+        // QGenericReturnArgument retVal(method.typeName());
+
+        // Qt最多支持10个参数的，后面再补上
+        switch (argList.length()) {
+        case 1:
+            success = method.invoke(object, retVal, argList[0]);
+            break;
+        case 2:
+            success = method.invoke(object, retVal, argList[0], argList[1]);
+            break;
+        case 3:
+            success = method.invoke(object, retVal, argList[0], argList[1], argList[2]);
+            break;
+        case 4:
+            success = method.invoke(object, retVal, argList[0], argList[1], argList[2], argList[3]);
+            break;
+        default:
+            break;
+        }
+
+        qDebug() << "success:" << success;
+
+        if(success == false)
+        {
+            return QVariant();
+        }
+
+        // 返回值这里还有问题，不能这样返
+        switch (method.returnType()) {
+        case QMetaType::QString:
+            return *(QString*)retVal.data();
+            break;
+        default:
+            break;
+        }
+
+        return QVariant();
+    }
+
+};
 // QObject wrapper for QuickJS opaque
 struct QObjectWrapper {
     QObject *obj;
     QScriptEngine::ValueOwnership ownership;
 
-    QList<ObjectProp> propList;
+    QList<ObjectProp>   propList;
+    QList<ObjectMethod> methodList;
 };
 static JSClassID s_qobjectClassId = 0;
 static void qobject_finalizer(JSRuntime *rt, JSValueConst val)
@@ -234,9 +287,10 @@ QScriptValue QScriptEngine::evaluate(const QString &program, const QString &file
         return QScriptValue();
 
     mFileNameBuffer.push_back(fileName);
+    qint64 scriptId = mFileNameBuffer.length() - 1;
     if(agent() != nullptr)
     {
-        agent()->scriptLoad(mFileNameBuffer.length() - 1, program, fileName, lineNumber);
+        agent()->scriptLoad(scriptId, program, fileName, lineNumber);
     }
 
     struct EvalGuard {
@@ -257,19 +311,26 @@ QScriptValue QScriptEngine::evaluate(const QString &program, const QString &file
                           fn,
                           JS_EVAL_TYPE_GLOBAL);
 
-    // if (JS_IsException(val))
-    // {
-    //     // wrap exception
-    //     JSValue exception = JS_GetException(m_ctx);
-    //     QScriptValue qVal = QScriptValue(m_ctx, exception, const_cast<QScriptEngine*>(this));
+    if (JS_IsException(val))
+    {
+        // wrap exception
+        JSValue exception = JS_GetException(m_ctx);
+        QScriptValue qVal = QScriptValue(m_ctx, exception, const_cast<QScriptEngine*>(this));
 
-    //     JS_FreeValue(m_ctx, val);
-    //     JS_FreeValue(m_ctx, exception);
+        // JS_GetException 之后，exception会被复位为 JS_UNINITIALIZED
+        // 因此自己再搞回去
+        JS_Throw(m_ctx, exception);
 
-    //     // qDebug() << "exception:" << qVal.toString();
+        // 放回去之后，就不能再调用这个了
+        // JS_FreeValue(m_ctx, exception);
 
-    //     return qVal;
-    // }
+
+        // 需要通知agent
+        if(agent() != nullptr)
+        {
+            agent()->exceptionThrow(scriptId, qVal, false);
+        }
+    }
 
     QScriptValue qVal = QScriptValue(m_ctx, val, const_cast<QScriptEngine*>(this));
 
@@ -422,14 +483,14 @@ QScriptValue QScriptEngine::newQObject(QObject *object,
         w->propList << ObjectProp{object, prop};
         // 使用setter/getter实现
         // 只能使用[]，不能使用[=]、[&]，否则签名对不上
-        qVal.setProperty(prop.name(), this->newFunction([](QScriptContext *contex, QScriptEngine *engine, void *data)->QScriptValue {
+        qVal.setProperty(prop.name(), this->newFunction([](QScriptContext *context, QScriptEngine *engine, void *data)->QScriptValue {
             ObjectProp *objProp = static_cast<ObjectProp*>(data);
             if(objProp == nullptr)
             {
                 return QScriptValue();
             }
 
-            if(contex->argumentCount() == 0)
+            if(context->argumentCount() == 0)
             {
                 // getter
                 return QScriptValue(objProp->read());
@@ -437,7 +498,7 @@ QScriptValue QScriptEngine::newQObject(QObject *object,
             else
             {
                 // setter
-                bool ret = objProp->write(contex->argument(0).toVariant());
+                bool ret = objProp->write(context->argument(0).toVariant());
                 return QScriptValue(ret);
             }
 
@@ -447,6 +508,58 @@ QScriptValue QScriptEngine::newQObject(QObject *object,
     }
 
     // 枚举对象所有槽函数
+    // Q_INVOKABLE
+    for (int i = 0; i < metaObj->methodCount(); ++i) {
+        auto method = metaObj->method(i);
+
+        // qDebug() << "method"
+        //          << method.name()
+        //          << method.typeName()
+        //          << method.methodSignature()
+        //          << method.methodType();
+
+        // 只注册部分
+        switch (method.methodType()) {
+        case QMetaMethod::Method:
+        case QMetaMethod::Slot:
+            break;
+        default:
+            continue;
+            break;
+        }
+        w->methodList << ObjectMethod{object, method};
+
+        qDebug() << "method"
+                 << method.name()
+                 << method.typeName()
+                 << method.methodSignature()
+                 << method.parameterNames()
+                 << method.parameterTypes();
+
+        qVal.setProperty(method.name().data(), this->newFunction([](QScriptContext *context, QScriptEngine *engine, void *data)->QScriptValue {
+            ObjectMethod *objMethod = static_cast<ObjectMethod*>(data);
+            if(objMethod == nullptr)
+            {
+                return QScriptValue();
+            }
+
+            QList<QGenericArgument> argList;
+            QString arg0 = context->argument(0).toString();
+            for (int argIdx = 0; argIdx < context->argumentCount(); ++argIdx) {
+                argList << QGenericArgument(objMethod->method.parameterTypes().at(argIdx).data(),
+                                            &arg0);
+            }
+
+            qDebug() << "invoke method:" << argList.length() << context->argument(0).toVariant();
+
+            // 调用函数
+            auto ret = objMethod->invoke(argList);
+
+            return QScriptValue(ret);
+
+        }, &w->methodList.last()));
+
+    }
 
     JS_FreeValue(m_ctx, jsObj);
 
@@ -557,80 +670,77 @@ QScriptValue QScriptEngine::undefinedValue()
 
 QScriptSyntaxCheckResult QScriptEngine::checkSyntax(const QString &program)
 {
-    return QScriptSyntaxCheckResult();
+    auto rt = JS_NewRuntime();
+    if(!rt)
+    {
+        qCritical() << "create js runtime fail";
+        return QScriptSyntaxCheckResult();
+    }
 
-    // if (!m_ctx)
-    //     return QScriptSyntaxCheckResult();
+    auto ctx = JS_NewContext(rt);
+    if(!ctx)
+    {
+        qCritical() << "create js context fail";
+        JS_FreeRuntime(rt);
+        rt = nullptr;
+        return QScriptSyntaxCheckResult();
+    }
 
-    // QByteArray ba = program.toUtf8();
-    // const char *fn = "<check>";
-    // int flags = JS_EVAL_TYPE_GLOBAL | JS_EVAL_FLAG_COMPILE_ONLY;
+    QByteArray ba = program.toUtf8();
+    const char *fn = "<check>";
+    int flags = JS_EVAL_TYPE_GLOBAL | JS_EVAL_FLAG_COMPILE_ONLY;
 
-    // JSValue val = JS_Eval(m_ctx, ba.constData(), ba.size(), fn, flags);
+    JSValue val = JS_Eval(ctx, ba.constData(), ba.size(), fn, flags);
 
-    // if (!JS_IsException(val)) {
-    //     JS_FreeValue(m_ctx, val);
-    //     return QScriptSyntaxCheckResult();
-    // }
+    if (!JS_IsException(val)) {
+        JS_FreeValue(ctx, val);
 
-    // JSValue exception = JS_GetException(m_ctx);
+        JS_FreeContext(ctx);
+        JS_FreeRuntime(rt);
 
-    // QString message;
-    // int line = -1;
-    // int column = -1;
+        // qDebug() << "not exception:-----";
+        return QScriptSyntaxCheckResult();
+    }
 
-    // JSValue msgProp = JS_GetPropertyStr(m_ctx, exception, "message");
-    // if (!JS_IsUndefined(msgProp) && !JS_IsNull(msgProp)) {
-    //     JSValue s = JS_ToString(m_ctx, msgProp);
-    //     const char *c = JS_ToCString(m_ctx, s);
-    //     if (c)
-    //         message = QString::fromUtf8(c);
-    //     JS_FreeCString(m_ctx, c);
-    //     JS_FreeValue(m_ctx, s);
-    // }
+    QString message;
+    int line = -1;
+    int column = -1;
 
-    // if (message.isEmpty()) {
-    //     JSValue s = JS_ToString(m_ctx, exception);
-    //     const char *c = JS_ToCString(m_ctx, s);
-    //     if (c)
-    //         message = QString::fromUtf8(c);
-    //     JS_FreeCString(m_ctx, c);
-    //     JS_FreeValue(m_ctx, s);
-    // }
+    QScriptValue aVal = QScriptValue(ctx, val, nullptr);
 
-    // // Try to parse file:line:column from message
-    // QString first = message.trimmed();
-    // QString inside;
-    // int lp = first.lastIndexOf('(');
-    // int rp = first.lastIndexOf(')');
-    // if (lp != -1 && rp > lp) {
-    //     inside = first.mid(lp + 1, rp - lp - 1).trimmed();
-    // } else {
-    //     if (first.contains(" at ", Qt::CaseInsensitive)) {
-    //         int at = first.lastIndexOf(" at ", -1, Qt::CaseInsensitive);
-    //         if (at >= 0)
-    //             inside = first.mid(at + 4).trimmed();
-    //     } else {
-    //         inside = first;
-    //     }
-    // }
+    JS_FreeValue(ctx, val);
 
-    // QStringList parts = inside.split(':');
-    // if (parts.size() >= 2) {
-    //     bool ok1 = false;
-    //     bool ok2 = false;
-    //     column = parts.takeLast().toInt(&ok1);
-    //     line = parts.takeLast().toInt(&ok2);
-    //     if (!ok1) column = -1;
-    //     if (!ok2) {
-    //         if (ok1) { line = column; column = -1; }
-    //         else line = -1;
-    //     }
-    // }
+    message = aVal.toString();
 
-    // JS_FreeValue(m_ctx, msgProp);
-    // JS_FreeValue(m_ctx, exception);
-    // JS_FreeValue(m_ctx, val);
+    // Try to parse file:line:column from message
+    QString first = message.trimmed();
+    QString inside;
+    int lp = first.lastIndexOf('(');
+    int rp = first.lastIndexOf(')');
+    if (lp != -1 && rp > lp) {
+        inside = first.mid(lp + 1, rp - lp - 1).trimmed();
+    } else {
+        if (first.contains(" at ", Qt::CaseInsensitive)) {
+            int at = first.lastIndexOf(" at ", -1, Qt::CaseInsensitive);
+            if (at >= 0)
+                inside = first.mid(at + 4).trimmed();
+        } else {
+            inside = first;
+        }
+    }
 
-    // return QScriptSyntaxCheckResult(message, line, column);
+    QStringList parts = inside.split(':');
+    if (parts.size() >= 2) {
+        bool ok1 = false;
+        bool ok2 = false;
+        column = parts.takeLast().toInt(&ok1);
+        line = parts.takeLast().toInt(&ok2);
+        if (!ok1) column = -1;
+        if (!ok2) {
+            if (ok1) { line = column; column = -1; }
+            else line = -1;
+        }
+    }
+
+    return QScriptSyntaxCheckResult(message, line, column);
 }
