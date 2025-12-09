@@ -86,6 +86,7 @@ public:
     QScriptValue nullValue();
     QScriptValue undefinedValue();
 
+    // 还未实现
     static QScriptSyntaxCheckResult checkSyntax(const QString &program);
 
     template <typename T>

@@ -23,33 +23,44 @@ MainWindow::MainWindow(QWidget *parent)
     MyScriptEngineAgent engineAgent(&engine);
     engine.setAgent(&engineAgent);
 
-    QtConcurrent::run([&](){
-        QThread::msleep(1000);
-        engine.abortEvaluation();
-    });
+    // // 测试 停止脚本
+    // QtConcurrent::run([&](){
+    //     QThread::msleep(1000);
+    //     engine.abortEvaluation();
+    // });
+
+    // 测试QObject
+    QObject qObj;
+    qObj.setObjectName("this is qObj");
+    qDebug() << "obj name:" << qObj.objectName();
+    auto jsQObj = engine.newQObject(&qObj);
+    engine.globalObject().setProperty("qObj", jsQObj);
+
 
     engine.globalObject().setProperty("print", engine.newFunction(funcPrint, this));
 
     QString scriptStr =
-// R"(var a = 10;
-// print(2)
-// print(3)
-// print(4)
-// var b = 100;
-// var c = a+b
-// /*function add(a, b){
-// return a + b;
-// }
-// add(a,b)*/
-// )"
-
-R"(
-while(1)
-{
-var a = 0;
-a++;
+R"(var a = 10;
+qObj.objectName = '789abc'
+print(qObj.objectName)
+print(2)
+print(3)
+print(4)
+var b = 100;
+var c = a+b
+/*function add(a, b){
+return a + b;
 }
+add(a,b)*/
 )"
+
+// R"(
+// while(1)
+// {
+// var a = 0;
+// a++;
+// }
+// )"
 
         ;
 

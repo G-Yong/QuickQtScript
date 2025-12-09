@@ -10,7 +10,8 @@ extern "C" {
 #include "../quickjs/quickjs.h"
 }
 
-// 要明确知道什么时候该用JS_DupValue，什么时候不该用
+// 要明确知道什么时候该用JS_DupValue/JS_FreeValue，什么时候不该用
+// 不然就会出现 资源未释放/资源重复释放的问题
 QScriptValue::QScriptValue()
     : m_ctx(nullptr), m_value(JS_UNDEFINED), m_engine(nullptr)
 {
@@ -57,6 +58,12 @@ QScriptValue::QScriptValue(bool value)
 {
     m_isVariant = true;
     m_variant = QVariant(value);
+}
+
+QScriptValue::QScriptValue(const QVariant value)
+{
+    m_isVariant = true;
+    m_variant = value;
 }
 
 QScriptValue::QScriptValue(JSContext *ctx, JSValue val, QScriptEngine *engine)

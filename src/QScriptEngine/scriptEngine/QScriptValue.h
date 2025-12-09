@@ -52,6 +52,7 @@ public:
     QScriptValue(uint value);
     QScriptValue(int value);
     QScriptValue(bool value);
+    QScriptValue(const QVariant value);
     QScriptValue(JSContext *ctx, JSValue val, QScriptEngine *engine = nullptr);
     QScriptValue(const QScriptValue &other);
     QScriptValue &operator=(const QScriptValue &other);

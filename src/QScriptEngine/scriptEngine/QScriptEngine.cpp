@@ -2,6 +2,7 @@
 #include <QScriptValue.h>
 #include <QScriptContext.h>
 #include <QScriptEngineAgent>
+#include <QMetaProperty>
 
 #include <QDebug>
 
@@ -13,19 +14,39 @@ extern "C" {
 #include "../quickjs/quickjs.h"
 }
 
+// 下面这堆操作是为了实现 QScriptEngine::ScriptOwnership
+// 当指定 ownership 为 QScriptEngine::ScriptOwnership时，脚本引擎在合适的时候释放掉QObject资源
+struct ObjectProp
+{
+    QObject *object = nullptr;
+    QMetaProperty prop;
+
+    QVariant read()
+    {
+        return prop.read(object);
+    }
+
+    bool write(QVariant var)
+    {
+        return prop.write(object, var);
+    }
+};
 // QObject wrapper for QuickJS opaque
 struct QObjectWrapper {
     QObject *obj;
     QScriptEngine::ValueOwnership ownership;
+
+    QList<ObjectProp> propList;
 };
-
 static JSClassID s_qobjectClassId = 0;
-
 static void qobject_finalizer(JSRuntime *rt, JSValueConst val)
 {
     void *p = JS_GetOpaque(val, s_qobjectClassId);
     if (!p)
         return;
+
+    qDebug() << "qobject_finalizer:------------>";
+
     QObjectWrapper *w = static_cast<QObjectWrapper*>(p);
     if (w->ownership == QScriptEngine::ScriptOwnership) {
         if (w->obj) {
@@ -38,10 +59,11 @@ static void qobject_finalizer(JSRuntime *rt, JSValueConst val)
     JS_SetOpaque(val, nullptr);
 }
 
-// 要明确知道什么时候该用JS_DupValue，什么时候不该用
+// 要明确知道什么时候该用JS_DupValue/JS_FreeValue，什么时候不该用
+// 不然就会出现 资源未释放/资源重复释放的问题
 
 
-// 中断函数，实现abortEval
+// 中断函数，用于实现 abortEval
 static int custom_interrupt_handler(JSRuntime *rt, void *opaque) {
     QScriptEngine *engine = static_cast<QScriptEngine*>(opaque);
     if (!engine)
@@ -134,6 +156,7 @@ QScriptEngine::QScriptEngine(QObject *parent)
     // 设置中断处理器
     JS_SetInterruptHandler(m_rt, custom_interrupt_handler, this);
 
+    // 这样是
     // Register a QuickJS class to wrap QObject pointers
     if (m_rt) {
         JS_NewClassID(m_rt, &m_qobjectClassId);
@@ -372,7 +395,9 @@ QScriptValue QScriptEngine::newVariant(const QScriptValue &object, const QVarian
     return newVariant(value);
 }
 
-QScriptValue QScriptEngine::newQObject(QObject *object, QScriptEngine::ValueOwnership ownership, const QScriptEngine::QObjectWrapOptions &options)
+QScriptValue QScriptEngine::newQObject(QObject *object,
+                                       QScriptEngine::ValueOwnership ownership,
+                                       const QScriptEngine::QObjectWrapOptions &options)
 {
     Q_UNUSED(options);
     if (!m_ctx || !object)
@@ -385,14 +410,53 @@ QScriptValue QScriptEngine::newQObject(QObject *object, QScriptEngine::ValueOwne
     QObjectWrapper *w = new QObjectWrapper{object, ownership};
     JS_SetOpaque(jsObj, w);
 
+    // JS_SetPropertyFunctionList(ctx, jsObj, rect_proto_funcs, countof(rect_proto_funcs));
+
     QScriptValue qVal = QScriptValue(m_ctx, jsObj, this);
+
+    // 创建好对象后，还得将QObject携带的属性、槽函数注册进去（信号比较麻烦，先不实现了）
+    // 枚举对象的所有属性
+    auto metaObj = object->metaObject();
+    for (int i = 0; i < metaObj->propertyCount(); ++i) {
+        auto prop = metaObj->property(i);
+        w->propList << ObjectProp{object, prop};
+        // 使用setter/getter实现
+        // 只能使用[]，不能使用[=]、[&]，否则签名对不上
+        qVal.setProperty(prop.name(), this->newFunction([](QScriptContext *contex, QScriptEngine *engine, void *data)->QScriptValue {
+            ObjectProp *objProp = static_cast<ObjectProp*>(data);
+            if(objProp == nullptr)
+            {
+                return QScriptValue();
+            }
+
+            if(contex->argumentCount() == 0)
+            {
+                // getter
+                return QScriptValue(objProp->read());
+            }
+            else
+            {
+                // setter
+                bool ret = objProp->write(contex->argument(0).toVariant());
+                return QScriptValue(ret);
+            }
+
+            return QScriptValue();
+
+        }, &w->propList.last()), QScriptValue::PropertyGetter | QScriptValue::PropertySetter);
+    }
+
+    // 枚举对象所有槽函数
 
     JS_FreeValue(m_ctx, jsObj);
 
     return qVal;
 }
 
-QScriptValue QScriptEngine::newQObject(const QScriptValue &scriptObject, QObject *qtObject, QScriptEngine::ValueOwnership ownership, const QScriptEngine::QObjectWrapOptions &options)
+QScriptValue QScriptEngine::newQObject(const QScriptValue &scriptObject,
+                                       QObject *qtObject,
+                                       QScriptEngine::ValueOwnership ownership,
+                                       const QScriptEngine::QObjectWrapOptions &options)
 {
     Q_UNUSED(options);
     if (!m_ctx || !qtObject)
@@ -405,7 +469,8 @@ QScriptValue QScriptEngine::newQObject(const QScriptValue &scriptObject, QObject
     QObjectWrapper *w = new QObjectWrapper{qtObject, ownership};
     JS_SetOpaque(wrapper, w);
 
-    if (scriptObject.isValid() && scriptObject.isObject()) {
+    if (scriptObject.isValid() && scriptObject.isObject())
+    {
         // attach the wrapper to the provided scriptObject as a property named "__qt__"
         JS_SetPropertyStr(m_ctx, scriptObject.rawValue(), "__qt__", JS_DupValue(m_ctx, wrapper));
     }
