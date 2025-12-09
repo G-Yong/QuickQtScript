@@ -46,9 +46,8 @@ void MyScriptEngineAgent::positionChange(qint64 scriptId, int lineNumber, int co
 
 void MyScriptEngineAgent::exceptionThrow(qint64 scriptId, const QScriptValue &exception, bool hasHandler)
 {
-    // 需要实现这个，
-    // engine()->currentContext()->backtrace();
-
+    auto curCtx = engine()->currentContext();
+    qDebug() << curCtx->backtrace() << curCtx->argumentCount();
     qDebug() << "agent exception throw" << exception.toString();
 
     // emit exceptionOccur(engine()->currentContext()->backtrace(), exception.toString());

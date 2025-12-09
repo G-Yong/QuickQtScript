@@ -209,7 +209,7 @@ QScriptEngine::QScriptEngine(QObject *parent)
     // 设置中断处理器
     JS_SetInterruptHandler(m_rt, custom_interrupt_handler, this);
 
-    // 这样是
+    // 这样是实现对QObject对象的析构
     // Register a QuickJS class to wrap QObject pointers
     if (m_rt) {
         JS_NewClassID(m_rt, &m_qobjectClassId);
@@ -219,6 +219,11 @@ QScriptEngine::QScriptEngine(QObject *parent)
         cd.class_name = "QScriptQObject";
         cd.finalizer = qobject_finalizer;
         JS_NewClass(m_rt, m_qobjectClassId, &cd);
+    }
+
+    if(mCurCtx == nullptr)
+    {
+        mCurCtx = new QScriptContext(m_ctx, JS_UNDEFINED, 0, nullptr, this);
     }
 }
 
@@ -243,6 +248,11 @@ QScriptEngine::~QScriptEngine()
     if (m_rt) {
         JS_FreeRuntime(m_rt);
         m_rt = nullptr;
+    }
+
+    if(mCurCtx != nullptr)
+    {
+        delete mCurCtx;
     }
 }
 
@@ -278,7 +288,8 @@ void QScriptEngine::collectGarbage()
 
 QScriptContext *QScriptEngine::currentContext() const
 {
-    return nullptr;
+    // QScriptContext
+    return mCurCtx;
 }
 
 QScriptValue QScriptEngine::evaluate(const QString &program, const QString &fileName, int lineNumber)
@@ -311,24 +322,28 @@ QScriptValue QScriptEngine::evaluate(const QString &program, const QString &file
                           fn,
                           JS_EVAL_TYPE_GLOBAL);
 
+    // 需要通知agent
     if (JS_IsException(val))
     {
-        // wrap exception
-        JSValue exception = JS_GetException(m_ctx);
-        QScriptValue qVal = QScriptValue(m_ctx, exception, const_cast<QScriptEngine*>(this));
-
-        // JS_GetException 之后，exception会被复位为 JS_UNINITIALIZED
-        // 因此自己再搞回去
-        JS_Throw(m_ctx, exception);
-
-        // 放回去之后，就不能再调用这个了
-        // JS_FreeValue(m_ctx, exception);
-
-
-        // 需要通知agent
-        if(agent() != nullptr)
+        // 假如是主动停止导致抛出的异常，那就不要通知 agent
+        // 否则就要通知
+        if (std::atomic_load(&interrupt_flag) == 0)
         {
-            agent()->exceptionThrow(scriptId, qVal, false);
+            // wrap exception
+            JSValue exception = JS_GetException(m_ctx);
+            QScriptValue qVal = QScriptValue(m_ctx, exception, const_cast<QScriptEngine*>(this));
+
+            // JS_GetException 之后，exception会被复位为 JS_UNINITIALIZED
+            // 因此自己再搞回去
+            JS_Throw(m_ctx, exception);
+
+            // 放回去之后，就不能再调用这个了
+            // JS_FreeValue(m_ctx, exception);
+
+            if(agent() != nullptr)
+            {
+                agent()->exceptionThrow(scriptId, qVal, false);
+            }
         }
     }
 
