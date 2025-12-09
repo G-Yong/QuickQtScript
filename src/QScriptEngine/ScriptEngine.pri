@@ -37,9 +37,9 @@ HEADERS += \
     $$PWD/scriptEngine/QScriptSyntaxCheckResult.h
 
 
-    DEFINES += __TINYC__
-win32: {
     # DEFINES += __TINYC__
+win32: {
+    DEFINES += __TINYC__
 
     LIBS += -lws2_32 -liphlpapi
     DEFINES += WIN32_LEAN_AND_MEAN

@@ -16,8 +16,7 @@ extern "C" {
 }
 
 #include <QScriptValue>
-#include <QScriptContext>
-#include "QScriptSyntaxCheckResult.h"
+#include <QScriptSyntaxCheckResult>
 
 class QScriptEngineAgent;
 class QScriptContext;
