@@ -363,18 +363,17 @@ QString QScriptValue::toString() const
 
     QString res;
 
-    // 不是异常
+    JSValue s = JS_ToString(m_ctx, m_value);
+    const char *c = JS_ToCString(m_ctx, s);
+
+    res = QString::fromUtf8(c ? c : "");
+
+    JS_FreeCString(m_ctx, c);
+    JS_FreeValue(m_ctx, s);
+
+    // 这里不需要将backtrace加进来
+    if(0)
     if(JS_IsException(m_value) == false)
-    {
-        JSValue s = JS_ToString(m_ctx, m_value);
-        const char *c = JS_ToCString(m_ctx, s);
-
-        res = QString::fromUtf8(c ? c : "");
-
-        JS_FreeCString(m_ctx, c);
-        JS_FreeValue(m_ctx, s);
-    }
-    else
     {
         // 假如是异常，要特殊处理
         qDebug() << "is exception";
@@ -386,7 +385,7 @@ QString QScriptValue::toString() const
             JSValue s = JS_ToString(m_ctx, exception);
             const char *c = JS_ToCString(m_ctx, s);
 
-            res = QString::fromUtf8(c ? c : "");
+            res += QString::fromUtf8(c ? c : "");
 
             JS_FreeCString(m_ctx, c);
             JS_FreeValue(m_ctx, s);
@@ -421,7 +420,8 @@ QString QScriptValue::toString() const
         JS_FreeValue(m_ctx, stack_val);
         JS_FreeAtom(m_ctx, atom_stack); // 释放原子
 
-        JS_FreeValue(m_ctx, exception);
+        JS_Throw(m_ctx, exception);
+        // JS_FreeValue(m_ctx, exception);
     }
 
     return res;
@@ -431,9 +431,11 @@ quint32 QScriptValue::toUInt32() const
 {
     if (!m_ctx)
         return 0;
+
     uint32_t v = 0;
     if (JS_ToUint32(m_ctx, &v, m_value) < 0)
         return 0;
+
     return (quint32)v;
 }
 

@@ -232,9 +232,25 @@ QScriptValue QScriptContext::throwError(QScriptContext::Error error, const QStri
     JSValue value = JS_UNDEFINED;
 
     switch (error) {
+    case UnknownError:
+    {
+        value = JS_ThrowPlainError(m_ctx, "%s", text.toUtf8().constData());
+    }; break;
+    case ReferenceError:
+    {
+        value = JS_ThrowReferenceError(m_ctx, "%s", text.toUtf8().constData());
+    }; break;
+    case SyntaxError:
+    {
+        value = JS_ThrowSyntaxError(m_ctx, "%s", text.toUtf8().constData());
+    }; break;
     case TypeError:
     {
         value = JS_ThrowTypeError(m_ctx, "%s", text.toUtf8().constData());
+    }; break;
+    case RangeError:
+    {
+        value = JS_ThrowRangeError(m_ctx, "%s", text.toUtf8().constData());
     }; break;
     default:
     {
