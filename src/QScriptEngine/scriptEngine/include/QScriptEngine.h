@@ -12,7 +12,7 @@
 #include <mutex>
 
 extern "C" {
-#include "../quickjs/quickjs.h"
+#include "quickjs.h"
 }
 
 #include <QScriptValue>

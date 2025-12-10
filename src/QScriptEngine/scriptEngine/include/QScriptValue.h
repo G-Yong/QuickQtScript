@@ -8,7 +8,7 @@
 #include <QObject>
 
 extern "C" {
-#include "../quickjs/quickjs.h"
+#include "quickjs.h"
 }
 
 class QScriptEngine;

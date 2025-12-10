@@ -1,6 +1,6 @@
 ﻿#include "QScriptContext.h"
-#include "QScriptValue.h"
-#include "QScriptEngine.h"
+#include <QScriptValue>
+#include <QScriptEngine>
 
 extern "C" {
 #include "../quickjs/quickjs.h"

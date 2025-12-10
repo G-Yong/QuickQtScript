@@ -6,7 +6,7 @@
 #include <vector>
 
 extern "C" {
-#include "../quickjs/quickjs.h"
+#include "quickjs.h"
 }
 
 class QScriptEngine;
