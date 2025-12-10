@@ -21,7 +21,8 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
 
-    QScriptEngine engine;
+    // 设置为static，是为了延长生存期，以免在后面调用 engine.abortEvaluation() 时，engine被析构对象
+    static QScriptEngine engine;
     MyScriptEngineAgent engineAgent(&engine);
     engine.setAgent(&engineAgent);
 
