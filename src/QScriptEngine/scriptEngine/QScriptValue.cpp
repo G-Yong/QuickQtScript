@@ -79,7 +79,7 @@ QScriptValue::QScriptValue(const QScriptValue &other)
 {
     // qDebug() << "JS_DupValue2";
     m_isVariant = other.m_isVariant;
-    m_variant = other.m_variant;
+    m_variant   = other.m_variant;
     if (m_ctx)
         m_value = JS_DupValue(m_ctx, other.m_value);
 }
@@ -90,14 +90,21 @@ QScriptValue &QScriptValue::operator=(const QScriptValue &other)
 
     if (this == &other)
         return *this;
+
+    m_isVariant = other.m_isVariant;
+    m_variant   = other.m_variant;
+
     if (m_ctx && !JS_IsUndefined(m_value))
         JS_FreeValue(m_ctx, m_value);
-    m_ctx = other.m_ctx;
+
+    m_ctx    = other.m_ctx;
     m_engine = other.m_engine;
+
     if (m_ctx)
         m_value = JS_DupValue(m_ctx, other.m_value);
     else
         m_value = JS_UNDEFINED;
+
     return *this;
 }
 
