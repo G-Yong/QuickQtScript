@@ -563,6 +563,96 @@ static QVariant JSValueToQVariant(JSContext *ctx, JSValueConst val, QScriptEngin
 
     // Objects -> QVariantMap (own enumerable string properties)
     if (JS_IsObject(val)) {
+
+        // qDebug() << "is obj";
+
+        // 检查是否为 Set
+        JSValue global = JS_GetGlobalObject(ctx);
+        JSValue setConstructor = JS_GetPropertyStr(ctx, global, "Set");
+        bool isSet = JS_IsInstanceOf(ctx, val, setConstructor) == 1;
+        JS_FreeValue(ctx, setConstructor);
+        JS_FreeValue(ctx, global);
+
+        if (isSet) {
+            // qDebug() << "is Set object";
+
+            // 方法1：使用 values() 方法
+            if(1)
+            {
+                QVariantList list;
+
+                JSValue valuesFunc = JS_GetPropertyStr(ctx, val, "values");
+                if (!JS_IsException(valuesFunc)) {
+                    JSValue iterator = JS_Call(ctx, valuesFunc, val, 0, nullptr);
+                    JS_FreeValue(ctx, valuesFunc);
+
+                    if (!JS_IsException(iterator)) {
+                        JSValue nextFunc = JS_GetPropertyStr(ctx, iterator, "next");
+
+                        while (true) {
+                            JSValue nextResult = JS_Call(ctx, nextFunc, iterator, 0, nullptr);
+                            if (JS_IsException(nextResult)) {
+                                JS_FreeValue(ctx, nextResult);
+                                break;
+                            }
+
+                            JSValue done = JS_GetPropertyStr(ctx, nextResult, "done");
+                            if (JS_ToBool(ctx, done)) {
+                                JS_FreeValue(ctx, done);
+                                JS_FreeValue(ctx, nextResult);
+                                break;
+                            }
+                            JS_FreeValue(ctx, done);
+
+                            JSValue value = JS_GetPropertyStr(ctx, nextResult, "value");
+                            QVariant element = JSValueToQVariant(ctx, value, engine, depth - 1);
+                            list.append(element);
+
+                            JS_FreeValue(ctx, value);
+                            JS_FreeValue(ctx, nextResult);
+                        }
+
+                        JS_FreeValue(ctx, nextFunc);
+                        JS_FreeValue(ctx, iterator);
+                    }
+                }
+
+                return QVariant(list);
+            }
+
+
+            // 方法2：使用 Array.from 将 Set 转换为数组
+            if(0)
+            {
+                JSValue arrayConstructor = JS_GetPropertyStr(ctx, global, "Array");
+                JSValue fromMethod = JS_GetPropertyStr(ctx, arrayConstructor, "from");
+
+                JSValue args[] = { val };
+                JSValue array = JS_Call(ctx, fromMethod, arrayConstructor, 1, args);
+
+                // 现在将数组转换为 QVariantList
+                QVariantList list;
+                int64_t len;
+                if (JS_IsArray(array)) {
+                    JS_GetLength(ctx, array, &len);
+                    for (int64_t i = 0; i < len; i++) {
+                        JSValue element = JS_GetPropertyUint32(ctx, array, i);
+                        QVariant qv = JSValueToQVariant(ctx, element, engine, depth - 1);
+                        list.append(qv);
+                        JS_FreeValue(ctx, element);
+                    }
+                }
+
+                JS_FreeValue(ctx, array);
+                JS_FreeValue(ctx, fromMethod);
+                JS_FreeValue(ctx, arrayConstructor);
+                JS_FreeValue(ctx, global);
+
+                return QVariant(list);
+            }
+        }
+
+        // 属性为名称的对象
         JSPropertyEnum *props = nullptr;
         uint32_t plen = 0;
         QVariantMap map;
@@ -581,6 +671,7 @@ static QVariant JSValueToQVariant(JSContext *ctx, JSValueConst val, QScriptEngin
             }
             JS_FreePropertyEnum(ctx, props, plen);
         }
+
         return QVariant(map);
     }
 

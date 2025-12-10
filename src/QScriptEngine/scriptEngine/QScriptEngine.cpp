@@ -360,11 +360,11 @@ QScriptValue QScriptEngine::globalObject() const
         return QScriptValue();
 
     JSValue g = JS_GetGlobalObject(m_ctx);
-    // return QScriptValue(m_ctx, g, const_cast<QScriptEngine*>(this));
 
     QScriptValue qVal = QScriptValue(m_ctx, g, const_cast<QScriptEngine*>(this));
 
-    JS_FreeValue(m_ctx, g);
+    // 这个不能调用释放，一旦释放会报错
+    // JS_FreeValue(m_ctx, g);
 
     return qVal;
 }

@@ -4,9 +4,9 @@
 #include <QString>
 #include <QMap>
 #include <QObject>
+#include <QScriptContext>
 
 class QScriptEngine;
-class QScriptContext;
 class QScriptValue;
 
 class QScriptEngineAgent
