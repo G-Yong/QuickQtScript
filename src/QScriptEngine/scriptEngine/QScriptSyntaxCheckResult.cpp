@@ -1,4 +1,5 @@
-﻿#include "QScriptSyntaxCheckResult.h"
+﻿#include <QScriptSyntaxCheckResult>
+
 // Implementation of QScriptSyntaxCheckResult with Qt-compatible API
 QScriptSyntaxCheckResult::QScriptSyntaxCheckResult()
     : m_state(Valid), m_errorLine(-1), m_errorColumn(-1)

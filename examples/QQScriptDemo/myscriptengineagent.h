@@ -2,6 +2,7 @@
 #define MYSCRIPTENGINEAGENT_H
 
 #include <QScriptEngineAgent>
+#include <QScriptContext>
 
 class MyScriptEngineAgent : public QScriptEngineAgent
 {

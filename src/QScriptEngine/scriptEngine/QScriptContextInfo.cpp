@@ -1,6 +1,6 @@
-#include "QScriptContextInfo.h"
-#include "QScriptContext.h"
-#include "QScriptValue.h"
+﻿#include <QScriptContextInfo>
+#include <QScriptContext>
+#include <QScriptValue>
 
 #include <QStringList>
 

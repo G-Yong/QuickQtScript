@@ -1,8 +1,8 @@
-#ifndef QSCRIPTENGINE_QSCRIPTVALUEITERATOR_H
+﻿#ifndef QSCRIPTENGINE_QSCRIPTVALUEITERATOR_H
 #define QSCRIPTENGINE_QSCRIPTVALUEITERATOR_H
 
 #include <QString>
-#include "QScriptValue.h"
+#include <QScriptValue>
 
 class QScriptValueIterator
 {

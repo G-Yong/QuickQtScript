@@ -1,10 +1,10 @@
-﻿#include "QScriptValueIterator.h"
-#include "QScriptEngine.h"
+﻿#include <QScriptValueIterator>
+#include <QScriptEngine>
 #include <QString>
 #include <QDebug>
 
 extern "C" {
-#include "../quickjs/quickjs.h"
+#include "quickjs.h"
 }
 
 QScriptValueIterator::QScriptValueIterator(const QScriptValue &object)

@@ -1,5 +1,5 @@
-﻿#include "QScriptEngineAgent.h"
-#include "QScriptEngine.h"
+﻿#include <QScriptEngineAgent.h>
+#include <QScriptEngine.h>
 
 #include <QDebug>
 #include <QScriptContext>

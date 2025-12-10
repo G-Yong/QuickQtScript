@@ -1,5 +1,5 @@
-﻿#include "QScriptValue.h"
-#include "QScriptEngine.h"
+﻿#include <QScriptValue>
+#include <QScriptEngine>
 
 #include <QStringList>
 #include <QDebug>
@@ -7,7 +7,7 @@
 #include <QVariantList>
 
 extern "C" {
-#include "../quickjs/quickjs.h"
+#include "quickjs.h"
 }
 
 // 要明确知道什么时候该用JS_DupValue/JS_FreeValue，什么时候不该用

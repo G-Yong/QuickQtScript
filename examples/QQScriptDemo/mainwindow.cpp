@@ -79,7 +79,7 @@ add(a,b)*/
     QScriptValue result;
     result = engine.evaluate(scriptStr, "main.js");
 
-    qDebug() << "script result:" << result.toString();
+    qDebug() << "script result:" << result.toString() << result.isError();
 }
 
 MainWindow::~MainWindow()

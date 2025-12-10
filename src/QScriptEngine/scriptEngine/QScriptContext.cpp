@@ -1,9 +1,9 @@
-﻿#include "QScriptContext.h"
+﻿#include <QScriptContext>
 #include <QScriptValue>
 #include <QScriptEngine>
 
 extern "C" {
-#include "../quickjs/quickjs.h"
+#include "quickjs.h"
 }
 
 QScriptContext::QScriptContext(JSContext *ctx,

@@ -11,7 +11,7 @@
 #include <atomic>
 
 extern "C" {
-#include "../quickjs/quickjs.h"
+#include "quickjs.h"
 }
 
 // 下面这堆操作是为了实现 QScriptEngine::ScriptOwnership
