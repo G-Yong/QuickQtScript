@@ -67,7 +67,7 @@ public:
     bool isArray() const;
     bool isBool() const;
     bool isDate() const;
-    bool isError() const; // 此函数还有问题
+    bool isError() const;
     bool isFunction() const;
     bool isNull() const;
     bool isNumber() const;

@@ -135,15 +135,36 @@ bool QScriptValue::equals(const QScriptValue &other) const
 }
 
 bool QScriptValue::isArray() const { return m_ctx && JS_IsArray(m_value); }
-bool QScriptValue::isBool() const { return m_ctx && JS_IsBool(m_value); }
+bool QScriptValue::isBool() const
+{
+    if (m_isVariant)
+        return m_variant.type() == QVariant::Bool;
+    return m_ctx && JS_IsBool(m_value);
+}
 bool QScriptValue::isDate() const { return m_ctx && JS_IsDate(m_value); }
-bool QScriptValue::isError() const { return m_ctx && JS_IsError(m_value); }
+bool QScriptValue::isError() const {
+    return m_ctx && (JS_IsError(m_value) || JS_IsException(m_value));
+}
 bool QScriptValue::isFunction() const { return m_ctx && JS_IsFunction(m_ctx, m_value); }
 bool QScriptValue::isNull() const { return m_ctx && JS_IsNull(m_value); }
-bool QScriptValue::isNumber() const { return m_ctx && JS_IsNumber(m_value); }
+bool QScriptValue::isNumber() const
+{
+    if (m_isVariant) {
+        QVariant::Type type = m_variant.type();
+        return type == QVariant::Int || type == QVariant::UInt || 
+               type == QVariant::LongLong || type == QVariant::ULongLong ||
+               type == QVariant::Double;
+    }
+    return m_ctx && JS_IsNumber(m_value);
+}
 bool QScriptValue::isObject() const { return m_ctx && JS_IsObject(m_value); }
 bool QScriptValue::isRegExp() const { return m_ctx && JS_IsRegExp(m_value); }
-bool QScriptValue::isString() const { return m_ctx && JS_IsString(m_value); }
+bool QScriptValue::isString() const
+{
+    if (m_isVariant)
+        return m_variant.type() == QVariant::String;
+    return m_ctx && JS_IsString(m_value);
+}
 bool QScriptValue::isUndefined() const { return m_ctx && JS_IsUndefined(m_value); }
 bool QScriptValue::isValid() const { return m_ctx != nullptr; }
 bool QScriptValue::isVariant() const { return m_isVariant; }
@@ -301,6 +322,8 @@ bool QScriptValue::strictlyEquals(const QScriptValue &other) const
 
 bool QScriptValue::toBool() const
 {
+    if (m_isVariant)
+        return m_variant.toBool();
     if (!m_ctx)
         return false;
     int v = JS_ToBool(m_ctx, m_value);
@@ -326,6 +349,8 @@ QDateTime QScriptValue::toDateTime() const
 
 qint32 QScriptValue::toInt32() const
 {
+    if (m_isVariant)
+        return m_variant.toInt();
     if (!m_ctx)
         return 0;
     int32_t res = 0;
@@ -341,6 +366,8 @@ double QScriptValue::toInteger() const
 
 double QScriptValue::toNumber() const
 {
+    if (m_isVariant)
+        return m_variant.toDouble();
     if (!m_ctx)
         return 0;
     JSValue num = JS_ToNumber(m_ctx, m_value);
@@ -358,6 +385,8 @@ double QScriptValue::toNumber() const
 
 QString QScriptValue::toString() const
 {
+    if (m_isVariant)
+        return m_variant.toString();
     if (!m_ctx)
         return QString();
 
@@ -429,6 +458,8 @@ QString QScriptValue::toString() const
 
 quint32 QScriptValue::toUInt32() const
 {
+    if (m_isVariant)
+        return m_variant.toUInt();
     if (!m_ctx)
         return 0;
 
