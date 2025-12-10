@@ -8,8 +8,16 @@
 
 #include "myqobject.h"
 
+#ifdef Q_OS_WIN
+#pragma execution_character_set("utf-8")
+#endif
+
 QScriptValue funcPrint(QScriptContext *contex, QScriptEngine *engine, void *data)
 {
+    if (contex->argumentCount() < 1)
+    {
+        return contex->throwError(QScriptContext::TypeError, "argument count is invalid!");
+    }
     qDebug() << "print-->:" << contex->argument(0).toVariant();
 
     return QScriptValue();
@@ -79,7 +87,7 @@ add(a,b)*/
     QScriptValue result;
     result = engine.evaluate(scriptStr, "main.js");
 
-    qDebug() << "script result:" << result.toString() << result.isError();
+    qDebug() << "script result:" << result.toString();
 }
 
 MainWindow::~MainWindow()

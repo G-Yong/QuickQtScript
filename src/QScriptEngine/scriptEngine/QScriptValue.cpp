@@ -130,7 +130,7 @@ bool QScriptValue::equals(const QScriptValue &other) const
 bool QScriptValue::isArray() const { return m_ctx && JS_IsArray(m_value); }
 bool QScriptValue::isBool() const { return m_ctx && JS_IsBool(m_value); }
 bool QScriptValue::isDate() const { return m_ctx && JS_IsDate(m_value); }
-bool QScriptValue::isError() const { return m_ctx && JS_IsError(m_value); }
+bool QScriptValue::isError() const { return m_ctx && ( JS_IsException(m_value) || JS_IsError(m_value) ); } //先判断是不是“异常类型(exception type)”
 bool QScriptValue::isFunction() const { return m_ctx && JS_IsFunction(m_ctx, m_value); }
 bool QScriptValue::isNull() const { return m_ctx && JS_IsNull(m_value); }
 bool QScriptValue::isNumber() const { return m_ctx && JS_IsNumber(m_value); }

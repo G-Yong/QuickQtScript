@@ -16362,8 +16362,34 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                 const char *filename = NULL;
                 const char *funcname = NULL;
 
-                uint32_t pc_index = (uint32_t)(pc - b->byte_code_buf - 1);
-                line_num = find_line_num(ctx, b, pc_index, &col_num);
+                uint32_t pc_index = (uint32_t)(pc - b->byte_code_buf);
+                // 尝试定位精确行号：优先使用 pc2line 表，其次向后查找最近的 OP_source_loc
+                if (b->pc2line_buf) {
+                    line_num = find_line_num(ctx, b, pc_index, &col_num);
+                }
+                // else {
+                //     const uint8_t *tab = (const uint8_t *)b->byte_code_buf;
+                //     int bc_len = b->byte_code_len;
+                //     int last_line = b->line_num;
+                //     int last_col = b->col_num;
+                //     int pos = (int)pc_index;
+                //     if (pos >= bc_len) pos = bc_len - 1;
+
+                //     /* 向后查找：从当前 pc 向前扫描，找到第一个完整的 OP_source_loc
+                //       （其参数在当前 pc 之前），读取其行列并使用它作为当前位置。*/
+                //     for (; pos >= 0; --pos) {
+                //         if (tab[pos] == OP_source_loc) {
+                //             /* OP_source_loc 占 1 + 4 + 4 = 9 字节 */
+                //             if (pos + 9 <= bc_len && (pos + 9) <= (int)pc_index) {
+                //                 last_line = get_u32(tab + pos + 1);
+                //                 last_col = get_u32(tab + pos + 5);
+                //                 break;
+                //             }
+                //         }
+                //     }
+                //     line_num = last_line;
+                //     col_num = last_col;
+                // }
                 filename = b->filename  ? JS_AtomToCString(ctx, b->filename) : NULL;
                 funcname = b->func_name ? JS_AtomToCString(ctx, b->func_name) : NULL;
 
@@ -26435,6 +26461,10 @@ static __exception int js_parse_var(JSParseState *s, int parse_flags, int tok,
                     int opcode, scope, label;
                     JSAtom name1;
 
+                    /* record source location for the assignment so debugger
+                       can map this bytecode to the correct source line */
+                    emit_source_loc(s);
+
                     emit_op(s, OP_scope_get_var);
                     emit_atom(s, name);
                     emit_u16(s, fd->scope_level);
@@ -26451,6 +26481,8 @@ static __exception int js_parse_var(JSParseState *s, int parse_flags, int tok,
                     if (js_parse_assign_expr2(s, parse_flags))
                         goto var_error;
                     set_object_name(s, name);
+                    /* mark source location for initializer */
+                    emit_source_loc(s);
                     emit_op(s, (tok == TOK_CONST || tok == TOK_LET) ?
                         OP_scope_put_var_init : OP_scope_put_var);
                     emit_atom(s, name);
@@ -26463,10 +26495,18 @@ static __exception int js_parse_var(JSParseState *s, int parse_flags, int tok,
                 }
                 if (tok == TOK_LET) {
                     /* initialize lexical variable upon entering its scope */
+                    emit_source_loc(s);
                     emit_op(s, OP_undefined);
                     emit_op(s, OP_scope_put_var_init);
                     emit_atom(s, name);
                     emit_u16(s, fd->scope_level);
+                } else if (tok == TOK_VAR) {
+                    /* var declaration without initializer: emit OP_source_loc so
+                       debugger/op-changed can map this declaration to source
+                       even though no runtime bytecode would otherwise be
+                       generated for a plain 'var v;'. */
+                    emit_source_loc(s);
+                    emit_op(s, OP_nop);
                 }
             }
             JS_FreeAtom(ctx, name);

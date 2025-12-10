@@ -31,12 +31,12 @@ void MyScriptEngineAgent::contextPop()
 
 void MyScriptEngineAgent::functionEntry(qint64 scriptId)
 {
-
+    qDebug() << "function entry";
 }
 
 void MyScriptEngineAgent::functionExit(qint64 scriptId, const QScriptValue &returnValue)
 {
-
+    qDebug() << "function exit";
 }
 
 void MyScriptEngineAgent::positionChange(qint64 scriptId, int lineNumber, int columnNumber)

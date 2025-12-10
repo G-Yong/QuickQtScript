@@ -15,21 +15,21 @@ INCLUDEPATH += $$PWD
 INCLUDEPATH += $$PWD/quickjs
 INCLUDEPATH += $$PWD/scriptEngine/include
 
-# 注意，此处使用的是 quickjs-ng https://github.com/quickjs-ng/quickjs
-# 而不是原版的，原版的对windows支持不好 https://github.com/bellard/quickjs
-SOURCES += \
-    $$PWD/quickjs/cutils.c \
-    $$PWD/quickjs/dtoa.c \
-    $$PWD/quickjs/libregexp.c \
-    $$PWD/quickjs/libunicode.c \
-    $$PWD/quickjs/quickjs.c \
-    $$PWD/scriptEngine/QScriptContext.cpp \
-    $$PWD/scriptEngine/QScriptEngine.cpp \
-    $$PWD/scriptEngine/QScriptValue.cpp \
-    $$PWD/scriptEngine/QScriptValueIterator.cpp \
-    $$PWD/scriptEngine/QScriptEngineAgent.cpp \
-    $$PWD/scriptEngine/QScriptContextInfo.cpp \
-    $$PWD/scriptEngine/QScriptSyntaxCheckResult.cpp
+    # 注意，此处使用的是 quickjs-ng https://github.com/quickjs-ng/quickjs
+    # 而不是原版的，原版的对windows支持不好 https://github.com/bellard/quickjs
+    SOURCES += \
+        $$PWD/quickjs/cutils.c \
+        $$PWD/quickjs/dtoa.c \
+        $$PWD/quickjs/libregexp.c \
+        $$PWD/quickjs/libunicode.c \
+        $$PWD/quickjs/quickjs.c \
+        $$PWD/scriptEngine/QScriptContext.cpp \
+        $$PWD/scriptEngine/QScriptEngine.cpp \
+        $$PWD/scriptEngine/QScriptValue.cpp \
+        $$PWD/scriptEngine/QScriptValueIterator.cpp \
+        $$PWD/scriptEngine/QScriptEngineAgent.cpp \
+        $$PWD/scriptEngine/QScriptContextInfo.cpp \
+        $$PWD/scriptEngine/QScriptSyntaxCheckResult.cpp
 
 
 HEADERS += \
@@ -40,19 +40,21 @@ HEADERS += \
     $$PWD/quickjs/libunicode-table.h \
     $$PWD/quickjs/libunicode.h \
     $$PWD/quickjs/quickjs.h \
-    $$PWD/scriptEngine/include/QScriptContext.h \
-    $$PWD/scriptEngine/include/QScriptEngine.h \
-    $$PWD/scriptEngine/include/QScriptValue.h \
-    $$PWD/scriptEngine/include/QScriptValueIterator.h \
-    $$PWD/scriptEngine/include/QScriptEngineAgent.h \
-    $$PWD/scriptEngine/include/QScriptContextInfo.h \
-    $$PWD/scriptEngine/include/QScriptSyntaxCheckResult.h
+    $$PWD/scriptEngine/QScriptContext.h \
+    $$PWD/scriptEngine/QScriptEngine.h \
+    $$PWD/scriptEngine/QScriptValue.h \
+    $$PWD/scriptEngine/QScriptValueIterator.h \
+    $$PWD/scriptEngine/QScriptEngineAgent.h \
+    $$PWD/scriptEngine/QScriptContextInfo.h \
+    $$PWD/scriptEngine/QScriptSyntaxCheckResult.h
 
 
-    # DEFINES += __TINYC__
 win32: {
     DEFINES += __TINYC__
 
-    LIBS += -lws2_32 -liphlpapi
-    DEFINES += WIN32_LEAN_AND_MEAN
+        LIBS += -lws2_32 -liphlpapi
+        DEFINES += WIN32_LEAN_AND_MEAN
+    }
 }
+
+

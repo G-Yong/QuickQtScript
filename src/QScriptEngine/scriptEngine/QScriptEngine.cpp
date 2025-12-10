@@ -316,12 +316,16 @@ QScriptValue QScriptEngine::evaluate(const QString &program, const QString &file
     QByteArray ba = program.toUtf8();
     QByteArray fnba = fileName.toUtf8();
     const char *fn = fileName.isEmpty() ? "<eval>" : fnba.constData();
-    JSValue val = JS_Eval(m_ctx,
-                          ba.constData(),
-                          ba.size(),
-                          fn,
-                          JS_EVAL_TYPE_GLOBAL);
+    JSValue val;
 
+    // 使用带有flag的eval调用函数
+    JSEvalOptions options;
+    options.version = JS_EVAL_OPTIONS_VERSION;
+    options.eval_flags = JS_EVAL_TYPE_GLOBAL;
+    options.filename = fn;
+    options.line_num = (lineNumber > 0) ? lineNumber : 1;
+
+    val = JS_Eval2(m_ctx, ba.constData(), ba.size(), &options);
     // 需要通知agent
     if (JS_IsException(val))
     {

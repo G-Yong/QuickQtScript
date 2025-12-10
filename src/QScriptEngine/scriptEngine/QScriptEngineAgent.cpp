@@ -85,10 +85,11 @@ int scriptOPChanged(uint8_t op,
     int scriptId = agent->scriptId(fileName);
 
     // 按照测试，尝试出来的，原理不明
-    if(op != QJDefines::OP_check_define_var &&
-        op != QJDefines::OP_put_var &&
-        op != QJDefines::OP_leave_scope &&
-        op != QJDefines::OP_push_7
+    if(true
+    // && op != QJDefines::OP_check_define_var
+    // && op != QJDefines::OP_put_var
+    // && op != QJDefines::OP_leave_scope
+    // && op != QJDefines::OP_push_7
         )
     {
         // 不能每次op变动都调用一次，要行列号变化才调用
@@ -101,18 +102,34 @@ int scriptOPChanged(uint8_t op,
 
     switch(op)
     {
+    case QJDefines::OP_tail_call_method:
+    case QJDefines::OP_call_method:
+    case QJDefines::OP_tail_call:
+    case QJDefines::OP_call_constructor:
     case QJDefines::OP_call0:
     case QJDefines::OP_call1:
     case QJDefines::OP_call2:
     case QJDefines::OP_call3:
     case QJDefines::OP_call:{
+        qDebug() << "op changed:"
+                 << (QJDefines::OPCodeEnum)op
+                 << fileName
+                 << funcName
+                 << line
+                 << col;
         agent->functionEntry(scriptId);
     };break;
     case QJDefines::OP_return_undef:
     case QJDefines::OP_return_async:
     case QJDefines::OP_return:{
         // 这个有问题，会有一次额外的进入
-        // agent->functionExit(scriptId, QScriptValue());
+        qDebug() << "op changed:"
+                 << (QJDefines::OPCodeEnum)op
+                 << fileName
+                 << funcName
+                 << line
+                 << col;
+        agent->functionExit(scriptId, QScriptValue());
     };break;
     }
 
@@ -165,12 +182,12 @@ void QScriptEngineAgent::exceptionThrow(qint64 scriptId, const QScriptValue &exc
 
 void QScriptEngineAgent::functionEntry(qint64 scriptId)
 {
-    // qDebug() << "function entry";
+    qDebug() << "function entry";
 }
 
 void QScriptEngineAgent::functionExit(qint64 scriptId, const QScriptValue &returnValue)
 {
-    // qDebug() << "function exit";
+    qDebug() << "function exit";
 }
 
 void QScriptEngineAgent::positionChange(qint64 scriptId, int lineNumber, int columnNumber)
