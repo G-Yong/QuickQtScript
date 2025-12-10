@@ -1,6 +1,7 @@
 ﻿#include <QScriptContext>
 #include <QScriptValue>
 #include <QScriptEngine>
+#include <QDebug>
 
 extern "C" {
 #include "quickjs.h"
@@ -22,7 +23,6 @@ QScriptContext::~QScriptContext()
 {
     if(m_ctx)
     {
-        // // 不知道为何这里不需要free，用了反而崩溃
         JS_FreeValue(m_ctx, m_this);
 
         if (!JS_IsUndefined(m_activation)) {
@@ -133,6 +133,10 @@ QScriptValue QScriptContext::argument(int index) const
 {
     if (!m_ctx || index < 0 || index >= (int)m_args.size())
         return QScriptValue();
+
+    // auto str = JS_ToCString(m_ctx, m_args[index]);
+    // qDebug() << "argv:" << index << str << JS_IsObject(m_args[index]);
+    // JS_FreeCString(m_ctx, str);
 
     return QScriptValue(m_ctx, m_args[index], m_engine);
 }
