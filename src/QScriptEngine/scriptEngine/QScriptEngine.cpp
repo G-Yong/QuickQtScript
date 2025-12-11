@@ -192,6 +192,14 @@ QScriptEngine::QScriptEngine(QObject *parent)
         return;
     }
 
+    // // JS_SetMemoryLimit 设置堆的大小
+    // // JS_SetMaxStackSize 设置栈的大小
+    // // JS_SetGCThreshold 设置GC触发阈值的大小
+    JS_SetMemoryLimit(m_rt, 0);
+    JS_SetMaxStackSize(m_rt, 0);
+    JS_SetGCThreshold(m_rt, -1);
+
+
     m_ctx = JS_NewContext(m_rt);
     if(!m_ctx)
     {
@@ -225,6 +233,21 @@ QScriptEngine::QScriptEngine(QObject *parent)
     {
         mCurCtx = new QScriptContext(m_ctx, JS_UNDEFINED, 0, nullptr, this);
     }
+
+    // GlobalObject
+    {
+        JSValue g = JS_GetGlobalObject(m_ctx);
+
+        QScriptValue qVal = QScriptValue(m_ctx, g, const_cast<QScriptEngine*>(this));
+
+        // 这个不能调用释放，一旦释放会报错
+        // 这里奇怪得很，假如在debug模式，不执行释放的话，会导致报错：
+        // 但是，在release时，假如加上了，又会报oxc000005错误,估计是重复释放
+        JS_FreeValue(m_ctx, g);
+
+        mGlobalObject = qVal;
+    }
+
 }
 
 QScriptEngine::~QScriptEngine()
@@ -361,19 +384,7 @@ QScriptValue QScriptEngine::evaluate(const QString &program, const QString &file
 
 QScriptValue QScriptEngine::globalObject() const
 {
-    if (!m_ctx)
-        return QScriptValue();
-
-    JSValue g = JS_GetGlobalObject(m_ctx);
-
-    QScriptValue qVal = QScriptValue(m_ctx, g, const_cast<QScriptEngine*>(this));
-
-    // 这个不能调用释放，一旦释放会报错
-    // 这里奇怪得很，假如在debug模式，不执行释放的话，会导致报错：
-    // 但是，在实际使用时，假如加上了，又会报重复释放
-    JS_FreeValue(m_ctx, g);
-
-    return qVal;
+    return mGlobalObject;
 }
 
 void QScriptEngine::setGlobalObject(const QScriptValue &object)

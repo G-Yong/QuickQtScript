@@ -26484,6 +26484,7 @@ static __exception int js_parse_var(JSParseState *s, int parse_flags, int tok,
                        generated for a plain 'var v;'. */
                     emit_source_loc(s);
                     emit_op(s, OP_nop);
+                    emit_op(s, OP_undefined);
                 }
             }
             JS_FreeAtom(ctx, name);

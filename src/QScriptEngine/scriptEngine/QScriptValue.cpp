@@ -110,11 +110,8 @@ QScriptValue &QScriptValue::operator=(const QScriptValue &other)
 
 QScriptValue::~QScriptValue()
 {
-    if(m_ctx)
-    {
-        // qDebug() << "free value";
+    if (m_ctx && !JS_IsUndefined(m_value))
         JS_FreeValue(m_ctx, m_value);
-    }
 }
 
 QVariant QScriptValue::data() const

@@ -41,7 +41,7 @@ void MyScriptEngineAgent::functionExit(qint64 scriptId, const QScriptValue &retu
 
 void MyScriptEngineAgent::positionChange(qint64 scriptId, int lineNumber, int columnNumber)
 {
-    // qDebug() << "agent position changed:" << scriptId << lineNumber << columnNumber;
+    qDebug() << "agent position changed:" << scriptId << lineNumber << columnNumber;
 }
 
 void MyScriptEngineAgent::exceptionThrow(qint64 scriptId, const QScriptValue &exception, bool hasHandler)

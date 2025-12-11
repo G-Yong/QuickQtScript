@@ -134,6 +134,8 @@ private:
     QStringList mFileNameBuffer;
 
     QScriptContext *mCurCtx{nullptr};
+
+    QScriptValue mGlobalObject;
 };
 
 
