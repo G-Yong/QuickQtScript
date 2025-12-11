@@ -1,5 +1,5 @@
 # QuickQtScript
-基于QuickJS实现的QtScript接口 / QtScript interface based on QuickJS
+基于QuickJS实现的QtScript接口 / QtScript interface based on QuickJS 
 
 # 介绍
 本项目是基于QuickJS（[准确说是QuickJS-NG](https://github.com/quickjs-ng/quickjs/tree/v0.11.0)）v0.11.0实现的QtScript的部分接口，基本满足普通使用。更高级的功能后面会慢慢补全。 
