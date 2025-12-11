@@ -129,7 +129,7 @@ int scriptOPChanged(uint8_t op,
                  << funcName
                  << line
                  << col;
-        agent->functionExit(scriptId, QScriptValue());
+        // agent->functionExit(scriptId, QScriptValue());
     };break;
     }
 

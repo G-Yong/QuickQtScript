@@ -40,13 +40,13 @@ HEADERS += \
     $$PWD/quickjs/libunicode-table.h \
     $$PWD/quickjs/libunicode.h \
     $$PWD/quickjs/quickjs.h \
-    $$PWD/scriptEngine/QScriptContext.h \
-    $$PWD/scriptEngine/QScriptEngine.h \
-    $$PWD/scriptEngine/QScriptValue.h \
-    $$PWD/scriptEngine/QScriptValueIterator.h \
-    $$PWD/scriptEngine/QScriptEngineAgent.h \
-    $$PWD/scriptEngine/QScriptContextInfo.h \
-    $$PWD/scriptEngine/QScriptSyntaxCheckResult.h
+    $$PWD/scriptEngine/include/QScriptContext.h \
+    $$PWD/scriptEngine/include/QScriptEngine.h \
+    $$PWD/scriptEngine/include/QScriptValue.h \
+    $$PWD/scriptEngine/include/QScriptValueIterator.h \
+    $$PWD/scriptEngine/include/QScriptEngineAgent.h \
+    $$PWD/scriptEngine/include/QScriptContextInfo.h \
+    $$PWD/scriptEngine/include/QScriptSyntaxCheckResult.h
 
 
 win32: {
@@ -54,7 +54,6 @@ win32: {
 
         LIBS += -lws2_32 -liphlpapi
         DEFINES += WIN32_LEAN_AND_MEAN
-    }
 }
 
 
