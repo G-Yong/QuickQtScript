@@ -110,6 +110,7 @@ QScriptValue &QScriptValue::operator=(const QScriptValue &other)
 
 QScriptValue::~QScriptValue()
 {
+
     if(m_ctx)
     {
         // qDebug() << "free value";
