@@ -102,6 +102,8 @@ int scriptOPChanged(uint8_t op,
 
     switch(op)
     {
+    case QJDefines::OP_fclosure:
+    case QJDefines::OP_fclosure8:
     case QJDefines::OP_tail_call_method:
     case QJDefines::OP_call_method:
     case QJDefines::OP_tail_call:
@@ -111,25 +113,28 @@ int scriptOPChanged(uint8_t op,
     case QJDefines::OP_call2:
     case QJDefines::OP_call3:
     case QJDefines::OP_call:{
-        qDebug() << "op changed:"
-                 << (QJDefines::OPCodeEnum)op
-                 << fileName
-                 << funcName
-                 << line
-                 << col;
+        // // functionEntry 和 functionExit 一定要成对
+        // qDebug() << "functon entry:"
+        //          << (QJDefines::OPCodeEnum)op
+        //          << fileName
+        //          << funcName
+        //          << line
+        //          << col;
         agent->functionEntry(scriptId);
     };break;
     case QJDefines::OP_return_undef:
     case QJDefines::OP_return_async:
     case QJDefines::OP_return:{
-        // 这个有问题，会有一次额外的进入
-        qDebug() << "op changed:"
-                 << (QJDefines::OPCodeEnum)op
-                 << fileName
-                 << funcName
-                 << line
-                 << col;
-        // agent->functionExit(scriptId, QScriptValue());
+        // // 这个有问题，会有一次额外的return,应该是脚本eval本身的这一次
+        // // 想办法去掉最后这一次？或者想办法在前面补充一次？
+        // // 已在engin中的eval中虚构了一次functionEntry
+        // qDebug() << "function exit:"
+        //          << (QJDefines::OPCodeEnum)op
+        //          << fileName
+        //          << funcName
+        //          << line
+        //          << col;
+        agent->functionExit(scriptId, QScriptValue());
     };break;
     }
 
