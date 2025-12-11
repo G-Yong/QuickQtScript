@@ -67,7 +67,7 @@ public:
     bool isArray() const;
     bool isBool() const;
     bool isDate() const;
-    bool isError() const; // 此函数还有问题 // isError之前只判断了是不是“错误类(class error)”，现在加上判断是不是“异常类型(exception type)”
+    bool isError() const;
     bool isFunction() const;
     bool isNull() const;
     bool isNumber() const;

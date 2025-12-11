@@ -6,6 +6,7 @@
 #include <QStringList>
 #include <QSet>
 #include <QMutex>
+#include <QDebug>
 
 #include <atomic>
 #include <vector>
@@ -90,8 +91,14 @@ public:
     // 还未实现
     static QScriptSyntaxCheckResult checkSyntax(const QString &program);
 
-    template <typename T>
-    QScriptValue toScriptValue(const T &value) { Q_UNUSED(value); return QScriptValue(); }
+    // template <typename T>
+    // QScriptValue toScriptValue(const T &value) { Q_UNUSED(value); return QScriptValue(); }
+    template<typename T>
+    QScriptValue toScriptValue(const T &value) {
+        QVariant var = QVariant::fromValue(value);
+        return QScriptValue(var);
+    }
+
 
     /* 以下接口仅供内部使用，请勿在类外或者子类中使用 */
     JSRuntime *runtime() const { return m_rt; }

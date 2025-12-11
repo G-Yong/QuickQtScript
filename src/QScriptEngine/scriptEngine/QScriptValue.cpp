@@ -79,7 +79,7 @@ QScriptValue::QScriptValue(const QScriptValue &other)
 {
     // qDebug() << "JS_DupValue2";
     m_isVariant = other.m_isVariant;
-    m_variant = other.m_variant;
+    m_variant   = other.m_variant;
     if (m_ctx)
         m_value = JS_DupValue(m_ctx, other.m_value);
 }
@@ -90,14 +90,21 @@ QScriptValue &QScriptValue::operator=(const QScriptValue &other)
 
     if (this == &other)
         return *this;
+
+    m_isVariant = other.m_isVariant;
+    m_variant   = other.m_variant;
+
     if (m_ctx && !JS_IsUndefined(m_value))
         JS_FreeValue(m_ctx, m_value);
-    m_ctx = other.m_ctx;
+
+    m_ctx    = other.m_ctx;
     m_engine = other.m_engine;
+
     if (m_ctx)
         m_value = JS_DupValue(m_ctx, other.m_value);
     else
         m_value = JS_UNDEFINED;
+
     return *this;
 }
 
@@ -128,15 +135,36 @@ bool QScriptValue::equals(const QScriptValue &other) const
 }
 
 bool QScriptValue::isArray() const { return m_ctx && JS_IsArray(m_value); }
-bool QScriptValue::isBool() const { return m_ctx && JS_IsBool(m_value); }
+bool QScriptValue::isBool() const
+{
+    if (m_isVariant)
+        return m_variant.type() == QVariant::Bool;
+    return m_ctx && JS_IsBool(m_value);
+}
 bool QScriptValue::isDate() const { return m_ctx && JS_IsDate(m_value); }
-bool QScriptValue::isError() const { return m_ctx && ( JS_IsException(m_value) || JS_IsError(m_value) ); } //先判断是不是“异常类型(exception type)”
+bool QScriptValue::isError() const {
+    return m_ctx && (JS_IsError(m_value) || JS_IsException(m_value));
+}
 bool QScriptValue::isFunction() const { return m_ctx && JS_IsFunction(m_ctx, m_value); }
 bool QScriptValue::isNull() const { return m_ctx && JS_IsNull(m_value); }
-bool QScriptValue::isNumber() const { return m_ctx && JS_IsNumber(m_value); }
+bool QScriptValue::isNumber() const
+{
+    if (m_isVariant) {
+        QVariant::Type type = m_variant.type();
+        return type == QVariant::Int || type == QVariant::UInt || 
+               type == QVariant::LongLong || type == QVariant::ULongLong ||
+               type == QVariant::Double;
+    }
+    return m_ctx && JS_IsNumber(m_value);
+}
 bool QScriptValue::isObject() const { return m_ctx && JS_IsObject(m_value); }
 bool QScriptValue::isRegExp() const { return m_ctx && JS_IsRegExp(m_value); }
-bool QScriptValue::isString() const { return m_ctx && JS_IsString(m_value); }
+bool QScriptValue::isString() const
+{
+    if (m_isVariant)
+        return m_variant.type() == QVariant::String;
+    return m_ctx && JS_IsString(m_value);
+}
 bool QScriptValue::isUndefined() const { return m_ctx && JS_IsUndefined(m_value); }
 bool QScriptValue::isValid() const { return m_ctx != nullptr; }
 bool QScriptValue::isVariant() const { return m_isVariant; }
@@ -294,6 +322,8 @@ bool QScriptValue::strictlyEquals(const QScriptValue &other) const
 
 bool QScriptValue::toBool() const
 {
+    if (m_isVariant)
+        return m_variant.toBool();
     if (!m_ctx)
         return false;
     int v = JS_ToBool(m_ctx, m_value);
@@ -319,6 +349,8 @@ QDateTime QScriptValue::toDateTime() const
 
 qint32 QScriptValue::toInt32() const
 {
+    if (m_isVariant)
+        return m_variant.toInt();
     if (!m_ctx)
         return 0;
     int32_t res = 0;
@@ -334,6 +366,8 @@ double QScriptValue::toInteger() const
 
 double QScriptValue::toNumber() const
 {
+    if (m_isVariant)
+        return m_variant.toDouble();
     if (!m_ctx)
         return 0;
     JSValue num = JS_ToNumber(m_ctx, m_value);
@@ -351,23 +385,24 @@ double QScriptValue::toNumber() const
 
 QString QScriptValue::toString() const
 {
+    if (m_isVariant)
+        return m_variant.toString();
     if (!m_ctx)
         return QString();
 
     QString res;
 
-    // 不是异常
+    JSValue s = JS_ToString(m_ctx, m_value);
+    const char *c = JS_ToCString(m_ctx, s);
+
+    res = QString::fromUtf8(c ? c : "");
+
+    JS_FreeCString(m_ctx, c);
+    JS_FreeValue(m_ctx, s);
+
+    // 这里不需要将backtrace加进来
+    if(0)
     if(JS_IsException(m_value) == false)
-    {
-        JSValue s = JS_ToString(m_ctx, m_value);
-        const char *c = JS_ToCString(m_ctx, s);
-
-        res = QString::fromUtf8(c ? c : "");
-
-        JS_FreeCString(m_ctx, c);
-        JS_FreeValue(m_ctx, s);
-    }
-    else
     {
         // 假如是异常，要特殊处理
         qDebug() << "is exception";
@@ -379,7 +414,7 @@ QString QScriptValue::toString() const
             JSValue s = JS_ToString(m_ctx, exception);
             const char *c = JS_ToCString(m_ctx, s);
 
-            res = QString::fromUtf8(c ? c : "");
+            res += QString::fromUtf8(c ? c : "");
 
             JS_FreeCString(m_ctx, c);
             JS_FreeValue(m_ctx, s);
@@ -414,7 +449,8 @@ QString QScriptValue::toString() const
         JS_FreeValue(m_ctx, stack_val);
         JS_FreeAtom(m_ctx, atom_stack); // 释放原子
 
-        JS_FreeValue(m_ctx, exception);
+        JS_Throw(m_ctx, exception);
+        // JS_FreeValue(m_ctx, exception);
     }
 
     return res;
@@ -422,11 +458,15 @@ QString QScriptValue::toString() const
 
 quint32 QScriptValue::toUInt32() const
 {
+    if (m_isVariant)
+        return m_variant.toUInt();
     if (!m_ctx)
         return 0;
+
     uint32_t v = 0;
     if (JS_ToUint32(m_ctx, &v, m_value) < 0)
         return 0;
+
     return (quint32)v;
 }
 
