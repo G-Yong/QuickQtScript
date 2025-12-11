@@ -2,7 +2,7 @@
 基于QuickJS实现的QtScript接口 / QtScript interface based on QuickJS
 
 # 介绍
-本项目是基于QuickJS（[准确说是QuickJS-NG](https://github.com/quickjs-ng/quickjs/tree/v0.11.0)）v0.11.0实现的QtScript的部分接口，基本满足普通使用。更高级的功能后面会慢慢补全。
+本项目是基于QuickJS（[准确说是QuickJS-NG](https://github.com/quickjs-ng/quickjs/tree/v0.11.0)）v0.11.0实现的QtScript的部分接口，基本满足普通使用。更高级的功能后面会慢慢补全。 
 
 本项目的基本目的是，让使用了QtScript编写的上层代码**零改动**就能将底层引擎从自带的引擎迁移到QuickJS引擎。
 
