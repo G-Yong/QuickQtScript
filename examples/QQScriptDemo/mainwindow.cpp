@@ -3,6 +3,7 @@
 
 #include <QDebug>
 #include <QtConcurrentRun>
+#include <QScriptValueIterator>
 
 #include "myscriptengineagent.h"
 
@@ -75,16 +76,39 @@ MainWindow::MainWindow(QWidget *parent)
 // }
 // )"
 
-R"(
-function add(a, b){
+// R"(
+// function add(a, b){
 // return a + b;
-// return;
-}
-add(1, 2)
-add(3, 4)
+// // return;
+// }
+// add(1, 2)
+// add(3, 4)
+// var a = 1 + 2
+// var b = a + 1
+// )"
+
+
+R"(let GI001 = 2
+    print(GI001);
+    if(GI001 === 2)
+    {
+        print('222222222222')
+    }
+    switch(GI001){
+    case 0:
+        print('00000000000')
+            break;
+    case 1:
+        print('11111111111')
+            break;
+    case 2:
+        print('22222222222')
+            break;
+    }
 )"
 
         ;
+
 
     // auto chkRet = engine.checkSyntax(scriptStr);
     // qDebug() << "result:"
