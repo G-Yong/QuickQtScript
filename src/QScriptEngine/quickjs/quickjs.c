@@ -16367,29 +16367,6 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                 if (b->pc2line_buf) {
                     line_num = find_line_num(ctx, b, pc_index, &col_num);
                 }
-                // else {
-                //     const uint8_t *tab = (const uint8_t *)b->byte_code_buf;
-                //     int bc_len = b->byte_code_len;
-                //     int last_line = b->line_num;
-                //     int last_col = b->col_num;
-                //     int pos = (int)pc_index;
-                //     if (pos >= bc_len) pos = bc_len - 1;
-
-                //     /* 向后查找：从当前 pc 向前扫描，找到第一个完整的 OP_source_loc
-                //       （其参数在当前 pc 之前），读取其行列并使用它作为当前位置。*/
-                //     for (; pos >= 0; --pos) {
-                //         if (tab[pos] == OP_source_loc) {
-                //             /* OP_source_loc 占 1 + 4 + 4 = 9 字节 */
-                //             if (pos + 9 <= bc_len && (pos + 9) <= (int)pc_index) {
-                //                 last_line = get_u32(tab + pos + 1);
-                //                 last_col = get_u32(tab + pos + 5);
-                //                 break;
-                //             }
-                //         }
-                //     }
-                //     line_num = last_line;
-                //     col_num = last_col;
-                // }
                 filename = b->filename  ? JS_AtomToCString(ctx, b->filename) : NULL;
                 funcname = b->func_name ? JS_AtomToCString(ctx, b->func_name) : NULL;
 

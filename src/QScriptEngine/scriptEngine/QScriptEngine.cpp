@@ -302,6 +302,7 @@ QScriptValue QScriptEngine::evaluate(const QString &program, const QString &file
     if(agent() != nullptr)
     {
         agent()->scriptLoad(scriptId, program, fileName, lineNumber);
+        agent()->functionEntry(scriptId);
     }
 
     struct EvalGuard {
@@ -368,7 +369,9 @@ QScriptValue QScriptEngine::globalObject() const
     QScriptValue qVal = QScriptValue(m_ctx, g, const_cast<QScriptEngine*>(this));
 
     // 这个不能调用释放，一旦释放会报错
-    // JS_FreeValue(m_ctx, g);
+    // 这里奇怪得很，假如在debug模式，不执行释放的话，会导致报错：
+    // 但是，在实际使用时，假如加上了，又会报重复释放
+    JS_FreeValue(m_ctx, g);
 
     return qVal;
 }
@@ -548,12 +551,12 @@ QScriptValue QScriptEngine::newQObject(QObject *object,
         }
         w->methodList << ObjectMethod{object, method};
 
-        qDebug() << "method"
-                 << method.name()
-                 << method.typeName()
-                 << method.methodSignature()
-                 << method.parameterNames()
-                 << method.parameterTypes();
+        // qDebug() << "method"
+        //          << method.name()
+        //          << method.typeName()
+        //          << method.methodSignature()
+        //          << method.parameterNames()
+        //          << method.parameterTypes();
 
         qVal.setProperty(method.name().data(), this->newFunction([](QScriptContext *context, QScriptEngine *engine, void *data)->QScriptValue {
             ObjectMethod *objMethod = static_cast<ObjectMethod*>(data);

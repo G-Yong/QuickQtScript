@@ -41,7 +41,7 @@ void MyScriptEngineAgent::functionExit(qint64 scriptId, const QScriptValue &retu
 
 void MyScriptEngineAgent::positionChange(qint64 scriptId, int lineNumber, int columnNumber)
 {
-    qDebug() << "agent position changed:" << scriptId << lineNumber << columnNumber;
+    // qDebug() << "agent position changed:" << scriptId << lineNumber << columnNumber;
 }
 
 void MyScriptEngineAgent::exceptionThrow(qint64 scriptId, const QScriptValue &exception, bool hasHandler)
@@ -49,8 +49,6 @@ void MyScriptEngineAgent::exceptionThrow(qint64 scriptId, const QScriptValue &ex
     auto curCtx = engine()->currentContext();
     qDebug() << curCtx->backtrace() << curCtx->argumentCount();
     qDebug() << "agent exception throw" << exception.toString();
-
-    // emit exceptionOccur(engine()->currentContext()->backtrace(), exception.toString());
 }
 
 void MyScriptEngineAgent::exceptionCatch(qint64 scriptId, const QScriptValue &exception)

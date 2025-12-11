@@ -30,7 +30,7 @@ MainWindow::MainWindow(QWidget *parent)
     ui->setupUi(this);
 
     // 设置为static，是为了延长生存期，以免在后面调用 engine.abortEvaluation() 时，engine被析构对象
-    static QScriptEngine engine;
+    /*static*/ QScriptEngine engine;
     MyScriptEngineAgent engineAgent(&engine);
     engine.setAgent(&engineAgent);
 
@@ -52,20 +52,20 @@ MainWindow::MainWindow(QWidget *parent)
     engine.globalObject().setProperty("print", engine.newFunction(funcPrint, this));
 
     QString scriptStr =
-R"(var a = 10; jkg%^
-qObj.objectName = '789abc'
-print(qObj.objectName)
-print(qObj.myFunc('tyhjk'))
-print(2)
-print(3)
-print(4)
-var b = 100;
-var c = a+b
-/*function add(a, b){
-return a + b;
-}
-add(a,b)*/
-)"
+// R"(var a = 10; jkg%^
+// qObj.objectName = '789abc'
+// print(qObj.objectName)
+// print(qObj.myFunc('tyhjk'))
+// print(2)
+// print(3)
+// print(4)
+// var b = 100;
+// var c = a+b
+// /*function add(a, b){
+// return a + b;
+// }
+// add(a,b)*/
+// )"
 
 // R"(
 // while(1)
@@ -74,6 +74,15 @@ add(a,b)*/
 // a++;
 // }
 // )"
+
+R"(
+function add(a, b){
+// return a + b;
+// return;
+}
+add(1, 2)
+add(3, 4)
+)"
 
         ;
 
