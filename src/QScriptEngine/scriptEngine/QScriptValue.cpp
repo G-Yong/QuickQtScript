@@ -70,7 +70,6 @@ QScriptValue::QScriptValue(JSContext *ctx, JSValue val, QScriptEngine *engine)
     : m_ctx(ctx), m_value(JS_DupValue(ctx, val)), m_engine(engine)
 {
     // qDebug() << "JS_DupValue1";
-
     // JS_FreeValue(ctx, val);
 }
 
@@ -80,8 +79,10 @@ QScriptValue::QScriptValue(const QScriptValue &other)
     // qDebug() << "JS_DupValue2";
     m_isVariant = other.m_isVariant;
     m_variant   = other.m_variant;
+
     if (m_ctx)
         m_value = JS_DupValue(m_ctx, other.m_value);
+
 }
 
 QScriptValue &QScriptValue::operator=(const QScriptValue &other)
@@ -112,6 +113,9 @@ QScriptValue::~QScriptValue()
 {
     if (m_ctx && !JS_IsUndefined(m_value))
         JS_FreeValue(m_ctx, m_value);
+
+    // if(m_ctx)
+    //     JS_FreeValue(m_ctx, m_value);
 }
 
 QVariant QScriptValue::data() const
@@ -187,6 +191,7 @@ QScriptValue QScriptValue::property(quint32 arrayIndex) const
 {
     if (!m_ctx)
         return QScriptValue();
+
     JSValue val = JS_GetPropertyUint32(m_ctx, m_value, arrayIndex);
 
     QScriptValue qVal = QScriptValue(m_ctx, val, m_engine);
