@@ -84,7 +84,7 @@ int scriptOPChanged(uint8_t op,
 
     int scriptId = agent->scriptId(fileName);
 
-    // 按照测试，尝试出来的，原理不明
+
     if(true
     // && op != QJDefines::OP_check_define_var
     // && op != QJDefines::OP_put_var
