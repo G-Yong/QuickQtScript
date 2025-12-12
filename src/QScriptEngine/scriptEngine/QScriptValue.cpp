@@ -518,6 +518,9 @@ JSValue QScriptValue::toJSValue(JSContext *ctx, QVariant var)
     JSValue theVal = JS_UNDEFINED;
 
     switch (var.type()) {
+    case QVariant::Bool:{
+        theVal = JS_NewBool(ctx, var.toBool());
+    }break;
     case QVariant::Int:
     case QVariant::UInt:
     case QVariant::LongLong:

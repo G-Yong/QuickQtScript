@@ -222,6 +222,10 @@ bool QScriptEngineAgent::isPosChanged(qint64 line, qint64 col)
     {
         flag = true;
     }
+    // if(mLastLine != line)
+    // {
+    //     flag = true;
+    // }
 
     mLastLine = line;
     mLastCol = col;
