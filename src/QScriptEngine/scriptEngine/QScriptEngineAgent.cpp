@@ -75,12 +75,12 @@ int scriptOPChanged(uint8_t op,
 
     // qDebug() << OP_call << OP_return;
 
-    qDebug() << "op changed:"
-             << (QJDefines::OPCodeEnum)op
-             << fileName
-             << funcName
-             << line
-             << col;
+    // qDebug() << "op changed:"
+    //          << (QJDefines::OPCodeEnum)op
+    //          << fileName
+    //          << funcName
+    //          << line
+    //          << col;
 
     int scriptId = agent->scriptId(fileName);
 
@@ -222,6 +222,10 @@ bool QScriptEngineAgent::isPosChanged(qint64 line, qint64 col)
     {
         flag = true;
     }
+    // if(mLastLine != line)
+    // {
+    //     flag = true;
+    // }
 
     mLastLine = line;
     mLastCol = col;
