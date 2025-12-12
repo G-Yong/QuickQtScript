@@ -385,7 +385,7 @@ QScriptValue QScriptEngine::evaluate(const QString &program, const QString &file
 
 QScriptValue QScriptEngine::globalObject() const
 {
-    return mGlobalObject;
+    return *mGlobalObject;
 }
 
 void QScriptEngine::setGlobalObject(const QScriptValue &object)
