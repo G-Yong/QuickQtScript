@@ -1,0 +1,3 @@
+[submodule "src/QScriptEngine/quickjs"]
+	path = src/QScriptEngine/quickjs
+	url = https://github.com/G-Yong/quickjs.git
