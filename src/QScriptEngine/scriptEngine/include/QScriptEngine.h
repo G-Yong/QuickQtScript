@@ -135,7 +135,7 @@ private:
 
     QScriptContext *mCurCtx{nullptr};
 
-    QScriptValue mGlobalObject;
+    QScriptValue *mGlobalObject{nullptr};
 };
 
 

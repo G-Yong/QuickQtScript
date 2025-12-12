@@ -195,9 +195,9 @@ QScriptEngine::QScriptEngine(QObject *parent)
     // // JS_SetMemoryLimit 设置堆的大小
     // // JS_SetMaxStackSize 设置栈的大小
     // // JS_SetGCThreshold 设置GC触发阈值的大小
-    JS_SetMemoryLimit(m_rt, 0);
-    JS_SetMaxStackSize(m_rt, 0);
-    JS_SetGCThreshold(m_rt, -1);
+    // JS_SetMemoryLimit(m_rt, 0);
+    // JS_SetMaxStackSize(m_rt, 0);
+    // JS_SetGCThreshold(m_rt, -1);
 
 
     m_ctx = JS_NewContext(m_rt);
@@ -238,14 +238,12 @@ QScriptEngine::QScriptEngine(QObject *parent)
     {
         JSValue g = JS_GetGlobalObject(m_ctx);
 
-        QScriptValue qVal = QScriptValue(m_ctx, g, const_cast<QScriptEngine*>(this));
+        mGlobalObject = new QScriptValue(m_ctx, g, this);
 
         // 这个不能调用释放，一旦释放会报错
-        // 这里奇怪得很，假如在debug模式，不执行释放的话，会导致报错：
-        // 但是，在release时，假如加上了，又会报oxc000005错误,估计是重复释放
+        // 这里奇怪得很，假如在debug模式，不执行释放的话，会导致报错：list_empty(&rt->gc_obj_list)
+        // 但是，在release时，假如加上了，又会报0xc000005错误,估计是重复释放
         JS_FreeValue(m_ctx, g);
-
-        mGlobalObject = qVal;
     }
 
 }
@@ -260,9 +258,17 @@ QScriptEngine::~QScriptEngine()
         // }
     }
 
-    if (m_ctx) {
-        // JS_RunGC(m_rt);
+    // 要先释放申请的资源，最后再释放引擎
+    if(mCurCtx != nullptr)
+    {
+        delete mCurCtx;
+    }
+    if(mGlobalObject != nullptr)
+    {
+        delete mGlobalObject;
+    }
 
+    if (m_ctx) {
         // clear context opaque to avoid dangling pointer
         JS_SetContextOpaque(m_ctx, nullptr);
         JS_FreeContext(m_ctx);
@@ -271,11 +277,6 @@ QScriptEngine::~QScriptEngine()
     if (m_rt) {
         JS_FreeRuntime(m_rt);
         m_rt = nullptr;
-    }
-
-    if(mCurCtx != nullptr)
-    {
-        delete mCurCtx;
     }
 }
 
@@ -337,17 +338,17 @@ QScriptValue QScriptEngine::evaluate(const QString &program, const QString &file
     // 中断标志位复位
     std::atomic_store(&interrupt_flag, 0);
 
-    QByteArray ba = program.toUtf8();
+    QByteArray ba   = program.toUtf8();
     QByteArray fnba = fileName.toUtf8();
-    const char *fn = fileName.isEmpty() ? "<eval>" : fnba.constData();
+    const char *fn  = fileName.isEmpty() ? "<eval>" : fnba.constData();
     JSValue val;
 
     // 使用带有flag的eval调用函数
     JSEvalOptions options;
-    options.version = JS_EVAL_OPTIONS_VERSION;
+    options.version    = JS_EVAL_OPTIONS_VERSION;
     options.eval_flags = JS_EVAL_TYPE_GLOBAL;
-    options.filename = fn;
-    options.line_num = (lineNumber > 0) ? lineNumber : 1;
+    options.filename   = fn;
+    options.line_num   = (lineNumber > 0) ? lineNumber : 1;
 
     val = JS_Eval2(m_ctx, ba.constData(), ba.size(), &options);
     // 需要通知agent
@@ -466,10 +467,10 @@ QScriptValue QScriptEngine::newVariant(const QVariant &value)
     if (value.type() == QVariant::String) {
         jVal = JS_NewString(m_ctx, value.toString().toUtf8().constData());
     }
-    if (value.type() == QVariant::Bool) {
+    else if (value.type() == QVariant::Bool) {
         jVal = JS_NewBool(m_ctx, value.toBool());
     }
-    if (value.canConvert<double>()) {
+    else if (value.canConvert<double>()) {
         jVal = JS_NewFloat64(m_ctx, value.toDouble());
     }
 
