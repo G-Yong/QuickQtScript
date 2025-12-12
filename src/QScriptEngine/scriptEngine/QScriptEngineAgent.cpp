@@ -86,17 +86,10 @@ int scriptOPChanged(uint8_t op,
 
     // 按照测试，尝试出来的，原理不明
     if(true
-
-    && op != QJDefines::QJDefines::OP_dup
-    && op != QJDefines::QJDefines::OP_scope_get_var_undef
-    // && op != QJDefines::QJDefines::OP_strict_eq
-    && op != QJDefines::QJDefines::OP_put_arg3
-    && op != QJDefines::QJDefines::OP_label
-
-    && op != QJDefines::OP_check_define_var
-    && op != QJDefines::OP_put_var
-    && op != QJDefines::OP_leave_scope
-    && op != QJDefines::OP_push_7
+    // && op != QJDefines::OP_check_define_var
+    // && op != QJDefines::OP_put_var
+    // && op != QJDefines::OP_leave_scope
+    // && op != QJDefines::OP_push_7
         )
     {
         // 不能每次op变动都调用一次，要行列号变化才调用

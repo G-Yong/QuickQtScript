@@ -89,6 +89,9 @@ MainWindow::MainWindow(QWidget *parent)
 
 
 R"(let GI001 = 2
+    var b = 0;
+    var c
+    c = b + 1
     print(GI001);
     if(GI001 === 2)
     {

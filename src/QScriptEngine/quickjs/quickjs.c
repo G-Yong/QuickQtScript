@@ -27178,6 +27178,7 @@ static __exception int js_parse_statement_or_decl(JSParseState *s,
             int default_label_pos;
             BlockEnv break_entry;
 
+            emit_source_loc(s);
             if (next_token(s))
                 goto fail;
 
@@ -27197,6 +27198,7 @@ static __exception int js_parse_statement_or_decl(JSParseState *s,
             label_case = -1;
             while (s->token.val != '}') {
                 if (s->token.val == TOK_CASE) {
+                    emit_source_loc(s);
                     label1 = -1;
                     if (label_case >= 0) {
                         /* skip the case if needed */
@@ -27205,6 +27207,7 @@ static __exception int js_parse_statement_or_decl(JSParseState *s,
                     emit_label(s, label_case);
                     label_case = -1;
                     for (;;) {
+                        emit_source_loc(s);
                         /* parse a sequence of case clauses */
                         if (next_token(s))
                             goto fail;
@@ -27223,6 +27226,7 @@ static __exception int js_parse_statement_or_decl(JSParseState *s,
                         }
                     }
                 } else if (s->token.val == TOK_DEFAULT) {
+                    emit_source_loc(s);
                     if (next_token(s))
                         goto fail;
                     if (js_parse_expect(s, ':'))
