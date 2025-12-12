@@ -51,9 +51,19 @@ HEADERS += \
 
 win32: {
     DEFINES += __TINYC__
-
-        LIBS += -lws2_32 -liphlpapi
-        DEFINES += WIN32_LEAN_AND_MEAN
+    LIBS += -lws2_32 -liphlpapi
+    DEFINES += WIN32_LEAN_AND_MEAN
+} else {
+    # 在quick.js 第52行左右有这么一段代码
+       #if defined(EMSCRIPTEN) || defined(_MSC_VER)
+       #define DIRECT_DISPATCH  0
+       #else
+       #define DIRECT_DISPATCH  1
+       #endif
+    # 也就意味着在Linux下，DIRECT_DISPATCH会被定义为1
+    # 经过测试，这样会导致JS_CallInternal()只被调用一次，从是我们的机制失效
+    # 因此需要强行让其使用  #define DIRECT_DISPATCH  0
+    DEFINES += EMSCRIPTEN
 }
 
 
