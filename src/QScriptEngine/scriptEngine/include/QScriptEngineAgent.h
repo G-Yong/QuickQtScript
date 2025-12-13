@@ -44,6 +44,8 @@ private:
 
     qint64 mLastLine;
     qint64 mLastCol;
+
+
 };
 
 class QJDefines: public QObject
