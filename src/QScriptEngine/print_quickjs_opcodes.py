@@ -9,10 +9,13 @@ if not file_path.exists():
     print("文件未找到:", file_path)
     sys.exit(2)
 
-pattern = re.compile(r'^\s*(?:DEF|def)\(\s*([A-Za-z0-9_]+)\s*,')
+pattern = re.compile(r'^\s*DEF\(\s*([A-Za-z0-9_]+)\s*,')
 names = []
 with file_path.open(encoding='utf-8') as f:
     for line in f:
+        # 跳过宏定义行
+        if '#define' in line or line.strip().startswith('#'):
+            continue
         m = pattern.match(line)
         if m:
             names.append(m.group(1))
