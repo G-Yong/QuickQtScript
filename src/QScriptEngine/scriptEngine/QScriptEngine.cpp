@@ -156,8 +156,21 @@ static JSValue nativeFunctionShim(JSContext *ctx,
     if (!engine->getNativeEntry(magic, func, &arg))
         return JS_UNDEFINED;
 
+    // 进入函数
+    auto agent = engine->agent();
+    if(agent != nullptr)
+    {
+        agent->functionEntry(-1);
+    }
+
     QScriptContext qctx(ctx, this_val, argc, argv, engine);
     QScriptValue res = func(&qctx, engine, arg);
+
+    // 退出函数
+    if(agent != nullptr)
+    {
+        agent->functionExit(-1, res);
+    }
 
     // qDebug() << "the returnd val:"
     //          << res.data()

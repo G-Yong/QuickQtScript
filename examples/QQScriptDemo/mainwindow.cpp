@@ -156,6 +156,9 @@ R"(function add(a, b){
     return a + b;
 }
 
+var val = add(12, 3)
+console.log(val)
+/*
 sleep(1000)
 console.log('result', add(12, 3))
 sleep(1000)
@@ -163,18 +166,19 @@ console.log('done')
 
 
 var val = 0
-while(1){
+//while(1)
+{
     sleep(1000)
     console.log(Date.now())
 
     switch(val){
+    case 0:
+         console.log('this is', val)
+    break;
     case 1:
          console.log('this is', val)
     break;
     case 2:
-         console.log('this is', val)
-    break;
-    case 3:
          console.log('this is', val)
     break;
     default:break;
@@ -182,11 +186,12 @@ while(1){
     sleep(1000)
 
     val++
-    if(val > 3)
+    if(val >= 2)
     {
         val = 0;
     }
 }
+*/
 )";
 }
 
