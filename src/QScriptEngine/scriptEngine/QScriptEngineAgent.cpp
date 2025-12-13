@@ -27,15 +27,6 @@ int scriptOPChanged(uint8_t op,
 
     int scriptId = agent->scriptId(fileName);
 
-    if(1)
-    {
-        // 不能每次op变动都调用一次，要行列号变化才调用
-        if(agent->isPosChanged(line, col))
-        {
-            // qDebug() << "script id:" << scriptId << fileName << line << col;
-            agent->positionChange(scriptId, line, col);
-        }
-    }
 
     // 使用函数名变化来检测函数进入/退出
     // 但是在执行自定义c++函数，不会有函数名的变更。因此对于自定义的函数，需要在QScriptEngine中处理
@@ -49,11 +40,13 @@ int scriptOPChanged(uint8_t op,
         {
             funcStack << currentFuncName;
             agent->functionEntry(scriptId);
+            agent->mFuncStackCounter++;
         }
         else if(funcStack.last() != currentFuncName)
         {
             funcStack << currentFuncName;
             agent->functionEntry(scriptId);
+            agent->mFuncStackCounter++;
         }
     }
 
@@ -66,8 +59,22 @@ int scriptOPChanged(uint8_t op,
         if(funcStack.length() > 0)
         {
             agent->functionExit(scriptId, QScriptValue());
+            agent->mFuncStackCounter--;
+            funcStack.removeLast();
         }
     };break;
+    }
+
+    // 一定要让functionEntry/functionExit在positionChange前面
+    // 只有这样才符合Qt原版的逻辑
+    if(1)
+    {
+        // 不能每次op变动都调用一次，要行列号变化才调用
+        if(agent->isPosChanged(line, col))
+        {
+            // qDebug() << "script id:" << scriptId << fileName << line << col;
+            agent->positionChange(scriptId, line, col);
+        }
     }
 
     return 0;
@@ -145,14 +152,14 @@ void QScriptEngineAgent::scriptUnload(qint64 id)
 bool QScriptEngineAgent::isPosChanged(qint64 line, qint64 col)
 {
     bool flag = false;
-    if(mLastLine != line || mLastCol != col)
-    {
-        flag = true;
-    }
-    // if(mLastLine != line)
+    // if(mLastLine != line || mLastCol != col)
     // {
     //     flag = true;
     // }
+    if(mLastLine != line)
+    {
+        flag = true;
+    }
 
     mLastLine = line;
     mLastCol = col;
@@ -168,6 +175,15 @@ qint64 QScriptEngineAgent::scriptId(QString fileName)
     }
 
     return engine()->fileNameBuffer().indexOf(fileName);
+}
+
+void QScriptEngineAgent::checkFunctionPair(qint64 scriptId, QScriptValue value)
+{
+    if(mFuncStackCounter != 0)
+    {
+        functionExit(scriptId, value);
+    }
+    mFuncStackCounter = 0;
 }
 
 // bool QScriptEngineAgent::supportsExtension(QScriptEngineAgent::Extension extension) const

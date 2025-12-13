@@ -34,14 +34,16 @@ public:
     qint64 scriptId(QString fileName);
 
     QList<QString> mFuncStack;
+    // 纯函数或者一些其他的脚本会导致无OP_return
+    // 只能手动判断一下了
+    qint64 mFuncStackCounter = 0;
+    void checkFunctionPair(qint64 scriptId, QScriptValue value);
 
 private:
     QScriptEngine *m_engine{nullptr};
 
     qint64 mLastLine;
     qint64 mLastCol;
-
-
 };
 
 class QJDefines: public QObject
