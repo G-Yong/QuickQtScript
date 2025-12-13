@@ -340,6 +340,7 @@ QScriptValue QScriptEngine::evaluate(const QString &program, const QString &file
     {
         agent()->scriptLoad(scriptId, program, fileName, lineNumber);
         agent()->functionEntry(scriptId);
+        agent()->mFuncStackCounter++;
     }
 
     struct EvalGuard {
@@ -364,6 +365,8 @@ QScriptValue QScriptEngine::evaluate(const QString &program, const QString &file
     options.line_num   = (lineNumber > 0) ? lineNumber : 1;
 
     val = JS_Eval2(m_ctx, ba.constData(), ba.size(), &options);
+    QScriptValue qVal = QScriptValue(m_ctx, val, const_cast<QScriptEngine*>(this));
+
     // 需要通知agent
     if (JS_IsException(val))
     {
@@ -389,7 +392,9 @@ QScriptValue QScriptEngine::evaluate(const QString &program, const QString &file
         }
     }
 
-    QScriptValue qVal = QScriptValue(m_ctx, val, const_cast<QScriptEngine*>(this));
+
+    agent()->checkFunctionPair(scriptId, qVal);
+
 
     JS_FreeValue(m_ctx, val);
 

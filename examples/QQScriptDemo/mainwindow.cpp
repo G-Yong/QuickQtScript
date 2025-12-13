@@ -127,6 +127,10 @@ void MainWindow::on_pushButton_start_clicked()
             }
 
             qDebug() << "script result:" << result.toString();
+
+            QMetaObject::invokeMethod(this, [=](){
+                on_pushButton_stop_clicked();
+            }, Qt::QueuedConnection);
         };
         QtConcurrent::run(functor);
     }
@@ -158,6 +162,11 @@ R"(function add(a, b){
 
 var val = add(12, 3)
 console.log(val)
+for(var i=0;i<50;i++)  {
+
+   var offset = 5
+   sleep(10000)
+}
 /*
 sleep(1000)
 console.log('result', add(12, 3))
