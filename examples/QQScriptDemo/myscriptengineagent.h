@@ -4,8 +4,17 @@
 #include <QScriptEngineAgent>
 #include <QScriptContext>
 
-class MyScriptEngineAgent : public QScriptEngineAgent
+struct PosInfo
 {
+    QString file;
+    qint64  line   = -1;
+    qint64  column = -1;
+};
+
+class MyScriptEngineAgent :public QObject,  public QScriptEngineAgent
+{
+    Q_OBJECT
+
 public:
     MyScriptEngineAgent(QScriptEngine *engine);
 
@@ -32,6 +41,19 @@ public:
     // virtual bool supportsExtension(Extension extension) const;
     // virtual QVariant extension(Extension extension,
     //                            const QVariant &argument = QVariant());
+
+
+    PosInfo currentPos(){
+        return mCurPos;
+    }
+
+signals:
+    void posChanged(PosInfo info);
+
+private:
+    PosInfo mCurPos;
+    QMap<qint64, QString> mFileMap;
+
 };
 
 #endif // MYSCRIPTENGINEAGENT_H

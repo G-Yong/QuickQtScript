@@ -394,17 +394,17 @@ QString QScriptValue::toString() const
 
     QString res;
 
-    JSValue s = JS_ToString(m_ctx, m_value);
-    const char *c = JS_ToCString(m_ctx, s);
-
-    res = QString::fromUtf8(c ? c : "");
-
-    JS_FreeCString(m_ctx, c);
-    JS_FreeValue(m_ctx, s);
-
-    // 这里不需要将backtrace加进来
-    if(0)
     if(JS_IsException(m_value) == false)
+    {
+        JSValue s = JS_ToString(m_ctx, m_value);
+        const char *c = JS_ToCString(m_ctx, s);
+
+        res = QString::fromUtf8(c ? c : "");
+
+        JS_FreeCString(m_ctx, c);
+        JS_FreeValue(m_ctx, s);
+    }
+    else
     {
         // 假如是异常，要特殊处理
         qDebug() << "is exception";
@@ -413,7 +413,7 @@ QString QScriptValue::toString() const
         JSValue exception = JS_GetException(m_ctx);
 
         {
-            JSValue s = JS_ToString(m_ctx, exception);
+            JSValue s = JS_ToString(m_ctx, exception); // 取的是 exception
             const char *c = JS_ToCString(m_ctx, s);
 
             res += QString::fromUtf8(c ? c : "");
@@ -422,34 +422,35 @@ QString QScriptValue::toString() const
             JS_FreeValue(m_ctx, s);
         }
 
-        // qDebug() << "exception:" << qVal.toString();
+        // 这里不需要将backtrace加进来
+        if(0)
+        {
+            // 1. 获取 “stack” 对应的原子（atom），这是高效查找属性的键
+            JSAtom atom_stack = JS_NewAtom(m_ctx, "stack");
 
+            // 2. 从异常对象中获取 stack 属性的值
+            JSValue stack_val = JS_GetProperty(m_ctx, exception, atom_stack);
 
-        // 1. 获取 “stack” 对应的原子（atom），这是高效查找属性的键
-        JSAtom atom_stack = JS_NewAtom(m_ctx, "stack");
+            // 3. 检查并转换堆栈信息为C字符串
+            if (!JS_IsUndefined(stack_val)) {
+                const char* stack_str = JS_ToCString(m_ctx, stack_val);
+                if (stack_str) {
+                    // 4. 打印错误和堆栈
+                    fprintf(stderr, "Exception occurred:\n%s\n", stack_str);
 
-        // 2. 从异常对象中获取 stack 属性的值
-        JSValue stack_val = JS_GetProperty(m_ctx, exception, atom_stack);
+                    res += QString("\n") + QString(stack_str);
 
-        // 3. 检查并转换堆栈信息为C字符串
-        if (!JS_IsUndefined(stack_val)) {
-            const char* stack_str = JS_ToCString(m_ctx, stack_val);
-            if (stack_str) {
-                // 4. 打印错误和堆栈
-                fprintf(stderr, "Exception occurred:\n%s\n", stack_str);
-
-                res += QString("\n") + QString(stack_str);
-
-                JS_FreeCString(m_ctx, stack_str); // 释放C字符串
+                    JS_FreeCString(m_ctx, stack_str); // 释放C字符串
+                }
+            } else {
+                // 如果 stack 属性不存在，打印一个提示
+                fprintf(stderr, "Exception occurred, but no stack trace is available.\n");
             }
-        } else {
-            // 如果 stack 属性不存在，打印一个提示
-            fprintf(stderr, "Exception occurred, but no stack trace is available.\n");
-        }
 
-        // 5. 释放所有创建的 JS 值
-        JS_FreeValue(m_ctx, stack_val);
-        JS_FreeAtom(m_ctx, atom_stack); // 释放原子
+            // 5. 释放所有创建的 JS 值
+            JS_FreeValue(m_ctx, stack_val);
+            JS_FreeAtom(m_ctx, atom_stack); // 释放原子
+        }
 
         JS_Throw(m_ctx, exception);
         // JS_FreeValue(m_ctx, exception);
