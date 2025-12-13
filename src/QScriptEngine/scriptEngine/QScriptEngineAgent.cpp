@@ -50,26 +50,6 @@ int scriptOPChanged(uint8_t op,
         }
     }
 
-    // 使用函数名变化来检测函数进入/退出
-    // 但是在执行自定义c++函数，不会有函数名的变更。因此对于自定义的函数，需要在QScriptEngine中处理
-
-    // 进入函数
-    QString currentFuncName = funcName ? QString(funcName) : QString();
-    if(currentFuncName.isEmpty() == false && currentFuncName != "<eval>")
-    {
-        QList<QString> &funcStack = agent->mFuncStack;
-        if(funcStack.length() == 0)
-        {
-            funcStack << currentFuncName;
-            agent->functionEntry(scriptId);
-        }
-        else if(funcStack.last() != currentFuncName)
-        {
-            funcStack << currentFuncName;
-            agent->functionEntry(scriptId);
-        }
-    }
-
     switch(op)
     {
     case QJDefines::OP_return_undef:
