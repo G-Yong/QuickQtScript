@@ -29,9 +29,9 @@ MainWindow::MainWindow(QWidget *parent)
 
     ui->pushButton_start->setVisible(true);
     ui->pushButton_stop->setVisible(false);
-    ui->pushButton_stepIn->setVisible(true);
-    ui->pushButton_stepOut->setVisible(true);
-    ui->pushButton_stepOver->setVisible(true);
+    ui->pushButton_stepIn->setVisible(false);
+    ui->pushButton_stepOut->setVisible(false);
+    ui->pushButton_stepOver->setVisible(false);
 
     codeEditor = new JSCodeEditor();
     codeEditor->setCodeFoldingEnabled(false); // 代码折叠功能还有大问题，先禁用
@@ -93,6 +93,9 @@ void MainWindow::on_pushButton_start_clicked()
 
         ui->pushButton_start->setVisible(false);
         ui->pushButton_stop->setVisible(true);
+        ui->pushButton_stepIn->setVisible(true);
+        ui->pushButton_stepOut->setVisible(true);
+        ui->pushButton_stepOver->setVisible(true);
         ui->plainTextEdit->clear();
         codeEditor->clearExecutionArrow();
 
@@ -167,6 +170,9 @@ void MainWindow::on_pushButton_stop_clicked()
 {
     ui->pushButton_start->setVisible(true);
     ui->pushButton_stop->setVisible(false);
+    ui->pushButton_stepIn->setVisible(false);
+    ui->pushButton_stepOut->setVisible(false);
+    ui->pushButton_stepOver->setVisible(false);
 
     if(mEngine.isNull() == false)
     {
@@ -186,6 +192,30 @@ R"(function add(a, b){
 var val = add(12, 3)
 console.log(val)
 
+var c
+var d = 1
+var e
+
+if(true){
+ console.log(true)
+}
+if(false){
+ console.log(false)
+}
+
+switch(d){
+case 0:
+     console.log('this is', val)
+break;
+case 1:
+     console.log('this is', val)
+break;
+case 2:
+     console.log('this is', val)
+break;
+default:break;
+}
+
 var offset = 0
 for(var i=0; i<50; i++)  {
    offset++
@@ -199,25 +229,12 @@ console.log('result', add(12, 3))
 sleep(1000)
 console.log('done')
 
-
 var val = 0
 //while(1)
 {
     sleep(1000)
     console.log(Date.now())
 
-    switch(val){
-    case 0:
-         console.log('this is', val)
-    break;
-    case 1:
-         console.log('this is', val)
-    break;
-    case 2:
-         console.log('this is', val)
-    break;
-    default:break;
-    }
     sleep(1000)
 
     val++
