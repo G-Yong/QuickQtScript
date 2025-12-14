@@ -9,6 +9,8 @@
 #include <QScriptEngineAgent>
 #include <QScriptContext>
 
+#pragma execution_character_set("utf-8")
+
 struct PosInfo
 {
     QString file;
