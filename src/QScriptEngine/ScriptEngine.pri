@@ -66,4 +66,6 @@ win32: {
     DEFINES += EMSCRIPTEN
 }
 
+# 还是直接固定使用吧。否则在window下使用mingw时，又被钻了空子
+    DEFINES += EMSCRIPTEN
 

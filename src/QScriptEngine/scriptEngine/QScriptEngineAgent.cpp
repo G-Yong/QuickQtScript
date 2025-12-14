@@ -126,12 +126,12 @@ void QScriptEngineAgent::exceptionThrow(qint64 scriptId, const QScriptValue &exc
 
 void QScriptEngineAgent::functionEntry(qint64 scriptId)
 {
-    qDebug() << "function entry";
+    // qDebug() << "function entry";
 }
 
 void QScriptEngineAgent::functionExit(qint64 scriptId, const QScriptValue &returnValue)
 {
-    qDebug() << "function exit";
+    // qDebug() << "function exit";
 }
 
 void QScriptEngineAgent::positionChange(qint64 scriptId, int lineNumber, int columnNumber)

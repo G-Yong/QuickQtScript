@@ -10,7 +10,9 @@
 
 #include "myscriptengineagent.h"
 
-#include "myqobject.h"
+// #include "myqobject.h"
+
+#define JS_FILE_NAME "main.js"
 
 #ifdef Q_OS_WIN
 #pragma execution_character_set("utf-8")
@@ -27,10 +29,9 @@ MainWindow::MainWindow(QWidget *parent)
 
     ui->pushButton_start->setVisible(true);
     ui->pushButton_stop->setVisible(false);
-    // 调试功能还没实现，先隐藏按钮
-    ui->pushButton_stepIn->setVisible(false);
-    ui->pushButton_stepOut->setVisible(false);
-    ui->pushButton_stepOver->setVisible(false);
+    ui->pushButton_stepIn->setVisible(true);
+    ui->pushButton_stepOut->setVisible(true);
+    ui->pushButton_stepOver->setVisible(true);
 
     codeEditor = new JSCodeEditor();
     codeEditor->setCodeFoldingEnabled(false); // 代码折叠功能还有大问题，先禁用
@@ -41,12 +42,25 @@ MainWindow::MainWindow(QWidget *parent)
     ui->widget->setLayout(codeEditorLayout);
 
     codeEditor->setPlainText(defaultCode());
+
+    connect(codeEditor, &JSCodeEditor::breakPointsChanged, this, [=](){
+        auto breakPoints = codeEditor->getBreakpoints();
+        mBreakPoints[JS_FILE_NAME] = breakPoints;
+        if(mEngineAgent.isNull() == false)
+        {
+            mEngineAgent->clearBreakpoints();
+            foreach (auto line, breakPoints) {
+                mEngineAgent->addBreakpoint(JS_FILE_NAME, line);
+            }
+        }
+    });
 }
 
 MainWindow::~MainWindow()
 {
     if(mEngine)
     {
+        mEngineAgent->stopDebugging();
         mEngine->abortEvaluation();
     }
     delete ui;
@@ -94,6 +108,14 @@ void MainWindow::on_pushButton_start_clicked()
                 codeEditor->setCurrentExecutionLine(info.line);
             }, Qt::QueuedConnection);
 
+            // 添加断点
+            auto bps = mBreakPoints[JS_FILE_NAME];
+            engineAgent.clearBreakpoints();
+            foreach (auto line, bps) {
+                engineAgent.addBreakpoint(JS_FILE_NAME, line);
+            }
+            engineAgent.setDebugMode(MyScriptEngineAgent::Continue);
+
             // // 测试QObject
             // // 存在重大问题，暂时不要使用此功能
             // MyQObject qObj;
@@ -120,7 +142,7 @@ void MainWindow::on_pushButton_start_clicked()
             // return;
 
             QScriptValue result;
-            result = engine.evaluate(scriptStr, "main.js");
+            result = engine.evaluate(scriptStr, JS_FILE_NAME);
             if(result.isError())
             {
                 handleLog(result.toString());
@@ -148,6 +170,7 @@ void MainWindow::on_pushButton_stop_clicked()
 
     if(mEngine.isNull() == false)
     {
+        mEngineAgent->stopDebugging();
         std::atomic_store(&stop_flag, 1);
         mEngine->abortEvaluation();
     }
@@ -162,10 +185,13 @@ R"(function add(a, b){
 
 var val = add(12, 3)
 console.log(val)
-for(var i=0;i<50;i++)  {
 
-   var offset = 5
-   sleep(10000)
+var offset = 0
+for(var i=0; i<50; i++)  {
+   offset++
+   sleep(1000)
+   console.log('offset', offset)
+   sleep(1000)
 }
 /*
 sleep(1000)
@@ -260,5 +286,41 @@ QScriptValue funcSleep(QScriptContext *context, QScriptEngine *engine, void *dat
     }
 
     return retVal;
+}
+
+
+void MainWindow::on_pushButton_stepOver_clicked()
+{
+    if(mEngineAgent.isNull() == false)
+    {
+        mEngineAgent->stepOver();
+    }
+}
+
+
+void MainWindow::on_pushButton_stepIn_clicked()
+{
+    if(mEngineAgent.isNull() == false)
+    {
+        mEngineAgent->stepInto();
+    }
+}
+
+
+void MainWindow::on_pushButton_stepOut_clicked()
+{
+    if(mEngineAgent.isNull() == false)
+    {
+        mEngineAgent->stepOut();
+    }
+}
+
+
+void MainWindow::on_pushButton_continue_clicked()
+{
+    if(mEngineAgent.isNull() == false)
+    {
+        mEngineAgent->continueExecution();
+    }
 }
 

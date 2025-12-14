@@ -22,7 +22,8 @@ HEADERS += \
     codeEditor/jscodeeditor.h \
     mainwindow.h \
     myqobject.h \
-    myscriptengineagent.h
+    myscriptengineagent.h \
+    quickjsTest.h
 
 FORMS += \
     mainwindow.ui

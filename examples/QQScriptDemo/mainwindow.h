@@ -33,6 +33,14 @@ private slots:
 
     void on_pushButton_stop_clicked();
 
+    void on_pushButton_stepOver_clicked();
+
+    void on_pushButton_stepIn_clicked();
+
+    void on_pushButton_stepOut_clicked();
+
+    void on_pushButton_continue_clicked();
+
 private:
     QString defaultCode();
 
@@ -43,5 +51,6 @@ private:
     std::atomic_int stop_flag = 0;
     QPointer<QScriptEngine>       mEngine{nullptr};
     QPointer<MyScriptEngineAgent> mEngineAgent{nullptr};
+    QMap<QString, QSet<int>> mBreakPoints;
 };
 #endif // MAINWINDOW_H

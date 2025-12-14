@@ -560,6 +560,8 @@ void JSCodeEditor::toggleBreakpoint(int lineNumber)
         breakpoints.insert(lineNumber);
     }
     lineNumberArea->update();
+
+    emit breakPointsChanged();
 }
 
 bool JSCodeEditor::hasBreakpoint(int lineNumber) const

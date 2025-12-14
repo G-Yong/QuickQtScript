@@ -212,13 +212,8 @@ void QScriptValue::setProperty(const QString &name, const QScriptValue &value, c
         return;
 
     JSValue val_to_set = JS_UNDEFINED;
-
-    // prepare value: if variant, create JS value (ownership transferred to QuickJS);
-    // otherwise duplicate the JSValue so we can pass ownership to QuickJS.
-    bool created_local = false;
     if (value.isVariant()) {
         val_to_set = toJSValue(m_ctx, value.data());
-        created_local = true;
     } else {
         val_to_set = JS_DupValue(m_ctx, value.rawValue());
         // val_to_set = value.rawValue();
@@ -228,8 +223,7 @@ void QScriptValue::setProperty(const QString &name, const QScriptValue &value, c
     int qjs_flags = JS_PROP_C_W_E; // default: configurable, writable, enumerable
     JSAtom atom = JS_NewAtom(m_ctx, name.toUtf8().constData());
     if (atom == JS_ATOM_NULL) {
-        if (!created_local)
-            JS_FreeValue(m_ctx, val_to_set);
+        JS_FreeValue(m_ctx, val_to_set);
         return;
     }
 
