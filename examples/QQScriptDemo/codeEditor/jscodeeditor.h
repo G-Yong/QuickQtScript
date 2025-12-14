@@ -110,6 +110,9 @@ public:
     QRectF getBlockBoundingRect(const QTextBlock &block) const { return blockBoundingRect(block); }
     QPointF getContentOffset() const { return contentOffset(); }
 
+signals:
+    void breakPointsChanged();
+
 protected:
     void resizeEvent(QResizeEvent *event) override;
     void contextMenuEvent(QContextMenuEvent *event) override;
