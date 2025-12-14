@@ -32,6 +32,8 @@ MainWindow::MainWindow(QWidget *parent)
     ui->pushButton_stepIn->setVisible(false);
     ui->pushButton_stepOut->setVisible(false);
     ui->pushButton_stepOver->setVisible(false);
+    ui->pushButton_continue->setVisible(false);
+
 
     codeEditor = new JSCodeEditor();
     codeEditor->setCodeFoldingEnabled(false); // 代码折叠功能还有大问题，先禁用
@@ -96,6 +98,7 @@ void MainWindow::on_pushButton_start_clicked()
         ui->pushButton_stepIn->setVisible(true);
         ui->pushButton_stepOut->setVisible(true);
         ui->pushButton_stepOver->setVisible(true);
+        ui->pushButton_continue->setVisible(true);
         ui->plainTextEdit->clear();
         codeEditor->clearExecutionArrow();
 
@@ -173,6 +176,7 @@ void MainWindow::on_pushButton_stop_clicked()
     ui->pushButton_stepIn->setVisible(false);
     ui->pushButton_stepOut->setVisible(false);
     ui->pushButton_stepOver->setVisible(false);
+    ui->pushButton_continue->setVisible(false);
 
     if(mEngine.isNull() == false)
     {
