@@ -112,8 +112,8 @@ public:
     }
 
 public:
-    int registerNativeFunction(FunctionWithArgSignature signature, void *arg);
-    bool getNativeEntry(int idx, FunctionWithArgSignature &outFunc, void **outArg) const;
+    QScriptValue registerNativeFunction(FunctionWithArgSignature signature, void *arg);
+    bool getNativeEntry(int idx, FunctionWithArgSignature &outFunc, void **outArg, JSValue &callee) const;
     QObject *qobjectFromJSValue(JSContext *ctx, JSValueConst val) const;
     JSClassID qObjectClassId() const { return m_qobjectClassId; }
 
@@ -126,6 +126,7 @@ private:
     struct NativeFunctionEntry {
         FunctionWithArgSignature func;
         void *arg;
+        JSValue callee;
     };
     std::vector<NativeFunctionEntry> m_nativeFunctions;
     mutable std::mutex m_nativeFunctionsMutex;
