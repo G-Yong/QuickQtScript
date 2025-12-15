@@ -22,11 +22,16 @@ HEADERS += \
     codeEditor/jscodeeditor.h \
     mainwindow.h \
     myqobject.h \
-    myscriptengineagent.h \
-    quickjsTest.h
+    myscriptengineagent.h
 
 FORMS += \
     mainwindow.ui
+
+contains(QT, script){
+} else {
+    HEADERS += \
+        quickjsTest.h
+}
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin
