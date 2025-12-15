@@ -41,8 +41,14 @@ private slots:
 
     void on_pushButton_continue_clicked();
 
+    void on_pushButton_reset_clicked();
+
+    void on_pushButton_loadDefault_clicked();
+    void on_pushButton_loadDebug_clicked();
+
 private:
     QString defaultCode();
+    QString debugCode();
 
 private:
     Ui::MainWindow *ui;

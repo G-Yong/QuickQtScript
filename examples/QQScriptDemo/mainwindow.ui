@@ -92,6 +92,36 @@
           </property>
          </widget>
         </item>
+        <item>
+         <widget class="QPushButton" name="pushButton_reset">
+          <property name="styleSheet">
+           <string notr="true">font: 20pt &quot;Microsoft YaHei UI&quot;;</string>
+          </property>
+          <property name="text">
+           <string>🔄</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="pushButton_loadDefault">
+          <property name="styleSheet">
+           <string notr="true">font: 12pt &quot;Microsoft YaHei UI&quot;;</string>
+          </property>
+          <property name="text">
+           <string>Load Default</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="pushButton_loadDebug">
+          <property name="styleSheet">
+           <string notr="true">font: 12pt &quot;Microsoft YaHei UI&quot;;</string>
+          </property>
+          <property name="text">
+           <string>Load Debug</string>
+          </property>
+         </widget>
+        </item>
        </layout>
       </item>
       <item>
