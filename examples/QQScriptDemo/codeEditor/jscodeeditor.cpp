@@ -11,6 +11,7 @@
 #include <QStringListModel>
 #include <QAbstractItemView>
 #include <QDebug>
+#include <QTimer>
 
 //==============================================================================
 //  JavaScript语法高亮器实现
@@ -153,12 +154,93 @@ JSCodeEditor::JSCodeEditor(QWidget *parent)
     setupCompleter();
     setupContextMenu();
 
+    // 初始化防抖计时器与 prevTextLines
+    editDebounceTimer = new QTimer(this);
+    editDebounceTimer->setSingleShot(true);
+    editDebounceTimer->setInterval(10); // 防抖
+    connect(editDebounceTimer, &QTimer::timeout, this, [this]() {
+        emit contentEditedDebounced();
+    });
+    prevTextLines = document()->toPlainText().split('\n');
+
     connect(this, &JSCodeEditor::blockCountChanged, this, &JSCodeEditor::updateLineNumberAreaWidth);
     connect(this, &JSCodeEditor::updateRequest, this, &JSCodeEditor::updateLineNumberArea);
     connect(this, &JSCodeEditor::cursorPositionChanged, this, &JSCodeEditor::highlightCurrentLine);
 
+    // 监听文档变更，启动防抖计时器
+    connect(document(), &QTextDocument::contentsChanged, this, [this]() {
+        // 只有在编辑器可写时触发防抖（便于外部在执行时禁用编辑）
+        if (!isReadOnly()) {
+            editDebounceTimer->start();
+        }
+    });
+
     updateLineNumberAreaWidth(0);
     highlightCurrentLine();
+}
+
+// 在编辑停止（外部在非执行状态下调用）后重映射断点与执行行
+void JSCodeEditor::remapBreakpointsAfterEdit()
+{
+    QStringList currLines = document()->toPlainText().split('\n');
+    int oldCount = prevTextLines.size();
+    int newCount = currLines.size();
+    int minCount = qMin(oldCount, newCount);
+
+    int firstDiff = 0;
+    while (firstDiff < minCount && prevTextLines[firstDiff] == currLines[firstDiff]) {
+        ++firstDiff;
+    }
+
+    if (firstDiff == minCount && oldCount == newCount) {
+        // 无变化
+        return;
+    }
+
+    int oldSuffix = oldCount - 1;
+    int newSuffix = newCount - 1;
+    while (oldSuffix >= firstDiff && newSuffix >= firstDiff && prevTextLines[oldSuffix] == currLines[newSuffix]) {
+        --oldSuffix;
+        --newSuffix;
+    }
+
+    int delta = newCount - oldCount; // 正为插入，负为删除
+
+    // 更新断点：在修改范围内的断点移除，修改范围后面的断点根据 delta 平移
+    QSet<int> newBps;
+    for (int bp : breakpoints) {
+        int idx = bp - 1; // zero-based
+        if (idx < firstDiff) {
+            newBps.insert(bp);
+        } else if (idx > oldSuffix) {
+            int newIdx = idx + delta;
+            if (newIdx >= 0) newBps.insert(newIdx + 1);
+        } else {
+            // bp 在被修改区域内 — 丢弃该断点
+        }
+    }
+    breakpoints = newBps;
+
+    // 更新执行箭头位置：如果在修改区域则清除；在修改区域之后则平移
+    if (currentExecutionLine > 0) {
+        int execIdx = currentExecutionLine - 1;
+        if (execIdx < firstDiff) {
+            // unchanged
+        } else if (execIdx > oldSuffix) {
+            currentExecutionLine = execIdx + delta + 1;
+        } else {
+            // 执行行被编辑区域覆盖，清除
+            currentExecutionLine = -1;
+        }
+    }
+
+    // 更新 prevTextLines 为当前内容
+    prevTextLines = currLines;
+
+    // 更新显示并通知
+    lineNumberArea->update();
+    viewport()->update();
+    emit breakPointsChanged();
 }
 
 void JSCodeEditor::setupEditor()

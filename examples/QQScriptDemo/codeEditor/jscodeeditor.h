@@ -25,6 +25,7 @@ class QPaintEvent;
 class QResizeEvent;
 class QSize;
 class QWidget;
+class QTimer;
 QT_END_NAMESPACE
 
 class LineNumberArea;
@@ -71,6 +72,9 @@ class JSCodeEditor : public QPlainTextEdit
 public:
     JSCodeEditor(QWidget *parent = nullptr);
 
+    // 在编辑停止后重映射断点和执行行（外部可访问）
+    void remapBreakpointsAfterEdit();
+
     void lineNumberAreaPaintEvent(QPaintEvent *event);
     void codeFoldingAreaPaintEvent(QPaintEvent *event);
     int lineNumberAreaWidth();
@@ -112,6 +116,8 @@ public:
 
 signals:
     void breakPointsChanged();
+    // 防抖后的内容变更信号
+    void contentEditedDebounced();
 
 protected:
     void resizeEvent(QResizeEvent *event) override;
@@ -154,6 +160,12 @@ private:
     // 代码执行箭头相关
     bool executionArrowEnabled; // 执行箭头显示状态
     int currentExecutionLine;   // 当前执行行号（-1表示无）
+
+    // 防抖和文本差异记录，用于在编辑后重映射断点和执行行
+    QStringList prevTextLines;
+    QTimer *editDebounceTimer{nullptr};
+
+    
 };
 
 //==============================================================================
