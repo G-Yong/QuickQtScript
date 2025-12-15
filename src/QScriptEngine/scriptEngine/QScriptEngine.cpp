@@ -392,9 +392,10 @@ QScriptValue QScriptEngine::evaluate(const QString &program, const QString &file
         }
     }
 
-
-    agent()->checkFunctionPair(scriptId, qVal);
-
+    if(agent() != nullptr)
+    {
+        agent()->checkFunctionPair(scriptId, qVal);
+    }
 
     JS_FreeValue(m_ctx, val);
 

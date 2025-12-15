@@ -61,6 +61,31 @@ QString QScriptValueIterator::name() const
     return res;
 }
 
+// 这种深复制方式存在问题
+JSValue JS_DeepCloneValue(JSContext *ctx, JSValueConst val) {
+    size_t size = 0;
+    // 使用 JS_WRITE_OBJ_REFERENCE 标志来支持对象引用，从而处理循环依赖
+    int write_flags = JS_WRITE_OBJ_REFERENCE;
+
+    // 1. 将JSValue序列化为字节数组
+    uint8_t *buf = JS_WriteObject(ctx, &size, val, write_flags);
+    if (!buf) {
+        // 如果序列化失败（例如，包含不支持的外部C对象），则返回异常
+        return JS_EXCEPTION;
+    }
+
+    // 2. 从字节数组反序列化为新的JSValue
+    // 同样需要 JS_READ_OBJ_REFERENCE 标志来正确解析对象引用
+    int read_flags = JS_READ_OBJ_REFERENCE;
+    JSValue cloned_val = JS_ReadObject(ctx, buf, size, read_flags);
+
+    // 3. 释放临时的字节数组
+    // 注意：JS_WriteObject返回的内存需要使用js_free_rt释放
+    js_free_rt(JS_GetRuntime(ctx), buf);
+
+    return cloned_val; // 返回深复制后的新JSValue
+}
+
 // 使用JSON方法深复制
 static JSValue js_json_deep_clone(JSContext *ctx, JSValueConst this_val) {
 
@@ -94,31 +119,6 @@ static JSValue js_json_deep_clone(JSContext *ctx, JSValueConst this_val) {
     return cloned;
 }
 
-// 这种方式存在问题
-JSValue JS_DeepCloneValue(JSContext *ctx, JSValueConst val) {
-    size_t size = 0;
-    // 使用 JS_WRITE_OBJ_REFERENCE 标志来支持对象引用，从而处理循环依赖
-    int write_flags = JS_WRITE_OBJ_REFERENCE;
-
-    // 1. 将JSValue序列化为字节数组
-    uint8_t *buf = JS_WriteObject(ctx, &size, val, write_flags);
-    if (!buf) {
-        // 如果序列化失败（例如，包含不支持的外部C对象），则返回异常
-        return JS_EXCEPTION;
-    }
-
-    // 2. 从字节数组反序列化为新的JSValue
-    // 同样需要 JS_READ_OBJ_REFERENCE 标志来正确解析对象引用
-    int read_flags = JS_READ_OBJ_REFERENCE;
-    JSValue cloned_val = JS_ReadObject(ctx, buf, size, read_flags);
-
-    // 3. 释放临时的字节数组
-    // 注意：JS_WriteObject返回的内存需要使用js_free_rt释放
-    js_free_rt(JS_GetRuntime(ctx), buf);
-
-    return cloned_val; // 返回深复制后的新JSValue
-}
-
 QScriptValue QScriptValueIterator::value() const
 {
     if (!m_currentAtom)
@@ -127,18 +127,28 @@ QScriptValue QScriptValueIterator::value() const
     if (!ctx)
         return QScriptValue();
 
-    JSValue v = JS_GetProperty(ctx, m_object.rawValue(), m_currentAtom);
+    // 目前经过测试，发现在LoongArch64设备中，假如使用浅复制会导致在后续操作中发生segment fail / bus error
+    // x86设备无法复现
+    QScriptValue qVal;
+    if(1) // 深复制
+    {
+        JSValue v = JS_GetProperty(ctx, m_object.rawValue(), m_currentAtom);
+        auto k = js_json_deep_clone(ctx, v);
+        // auto k = JS_DeepCloneValue(ctx, v); // 依然会有问题
+        JS_FreeValue(ctx, v);
 
-    auto k = js_json_deep_clone(ctx, v);
-    // auto k = JS_DeepCloneValue(ctx, v);
-    QScriptValue qVal = QScriptValue(ctx, k, m_object.engine());
+        qVal = QScriptValue(ctx, k, m_object.engine());
 
-    // QScriptValue qVal = QScriptValue(ctx, v, m_object.engine());
-
-    // 构建QScriptValue时已复制，因此需要清理掉
-    JS_FreeValue(ctx, v);
-
-    JS_FreeValue(ctx, k);
+        // 构建QScriptValue时已复制，因此需要清理掉
+        JS_FreeValue(ctx, k);
+    }
+    else // 浅复制
+    {
+        JSValue v = JS_GetProperty(ctx, m_object.rawValue(), m_currentAtom);
+        qVal = QScriptValue(ctx, v, m_object.engine());
+        // 构建QScriptValue时已复制，因此需要清理掉
+        JS_FreeValue(ctx, v);
+    }
 
     return qVal;
 }
