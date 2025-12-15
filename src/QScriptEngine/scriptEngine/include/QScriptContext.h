@@ -29,7 +29,12 @@ public:
         URIError
     };
 
-    QScriptContext(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, QScriptEngine *engine);
+    QScriptContext(JSContext *ctx,
+                   JSValueConst this_val,
+                   int argc,
+                   JSValueConst *argv,
+                   QScriptEngine *engine,
+                   JSValueConst callee);
     ~QScriptContext();
 
     QScriptValue activationObject() const;
@@ -59,7 +64,7 @@ private:
     JSValue m_activation{JS_UNDEFINED};
     std::vector<JSValue> m_args;
     QScriptEngine *m_engine{nullptr};
-
+    JSValue m_callee;
 };
 
 #endif // QSCRIPTENGINE_QSCRIPTCONTEXT_H

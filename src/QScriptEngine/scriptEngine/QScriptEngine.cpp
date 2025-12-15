@@ -153,7 +153,8 @@ static JSValue nativeFunctionShim(JSContext *ctx,
 
     QScriptEngine::FunctionWithArgSignature func = nullptr;
     void *arg = nullptr;
-    if (!engine->getNativeEntry(magic, func, &arg))
+    JSValue callee;
+    if (!engine->getNativeEntry(magic, func, &arg, callee))
         return JS_UNDEFINED;
 
     // 进入函数
@@ -163,7 +164,7 @@ static JSValue nativeFunctionShim(JSContext *ctx,
         agent->functionEntry(-1);
     }
 
-    QScriptContext qctx(ctx, this_val, argc, argv, engine);
+    QScriptContext qctx(ctx, this_val, argc, argv, engine, callee);
     QScriptValue res = func(&qctx, engine, arg);
 
     // 退出函数
@@ -244,7 +245,7 @@ QScriptEngine::QScriptEngine(QObject *parent)
 
     if(mCurCtx == nullptr)
     {
-        mCurCtx = new QScriptContext(m_ctx, JS_UNDEFINED, 0, nullptr, this);
+        mCurCtx = new QScriptContext(m_ctx, JS_UNDEFINED, 0, nullptr, this, JS_UNDEFINED);
     }
 
     // GlobalObject
@@ -455,24 +456,8 @@ QScriptValue QScriptEngine::newFunction(FunctionWithArgSignature signature, void
 {
     if (!m_ctx)
         return QScriptValue();
-    int idx = registerNativeFunction(signature, arg);
 
-    // qDebug() << "the func id:" << idx;
-
-    // 使用 JS_NewCFunctionMagic 搭配 JS_CFUNC_generic_magic
-    // 可以实现使用同一个名字，注册多个函数？
-    JSValue fn = JS_NewCFunctionMagic(m_ctx,
-                                      nativeFunctionShim,
-                                      "native",
-                                      0,
-                                      JS_CFUNC_generic_magic,
-                                      idx);
-
-    QScriptValue qVal = QScriptValue(m_ctx, fn, this);
-
-    JS_FreeValue(m_ctx, fn);
-
-    return qVal;
+    return registerNativeFunction(signature, arg);
 }
 
 QScriptValue QScriptEngine::newVariant(const QVariant &value)
@@ -648,21 +633,44 @@ QScriptValue QScriptEngine::newQObject(const QScriptValue &scriptObject,
     return qVal;
 }
 
-int QScriptEngine::registerNativeFunction(FunctionWithArgSignature signature, void *arg)
+QScriptValue QScriptEngine::registerNativeFunction(FunctionWithArgSignature signature,
+                                                   void *arg)
 {
     std::lock_guard<std::mutex> lk(m_nativeFunctionsMutex);
-    NativeFunctionEntry e{signature, arg};
+
+    // 将要新增的项目的index，恰好是目前的长度
+    int magicCode = m_nativeFunctions.size();
+
+    // 使用 JS_NewCFunctionMagic 搭配 JS_CFUNC_generic_magic
+    // 可以实现使用同一个名字，注册多个函数？
+    JSValue fn = JS_NewCFunctionMagic(m_ctx,
+                                      nativeFunctionShim,
+                                      "native",
+                                      0,
+                                      JS_CFUNC_generic_magic,
+                                      magicCode);
+
+    QScriptValue qVal = QScriptValue(m_ctx, fn, this);
+
+    JS_FreeValue(m_ctx, fn);
+
+    NativeFunctionEntry e{signature, arg, fn};
     m_nativeFunctions.push_back(e);
-    return (int)m_nativeFunctions.size() - 1;
+
+    return qVal;
 }
 
-bool QScriptEngine::getNativeEntry(int idx, FunctionWithArgSignature &outFunc, void **outArg) const
+bool QScriptEngine::getNativeEntry(int idx,
+                                   FunctionWithArgSignature &outFunc,
+                                   void **outArg,
+                                   JSValue &callee) const
 {
     std::lock_guard<std::mutex> lk(m_nativeFunctionsMutex);
     if (idx < 0 || idx >= (int)m_nativeFunctions.size())
         return false;
     outFunc = m_nativeFunctions[idx].func;
     *outArg = m_nativeFunctions[idx].arg;
+    callee  = m_nativeFunctions[idx].callee;
     return true;
 }
 
