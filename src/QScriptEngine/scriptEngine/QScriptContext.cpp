@@ -11,8 +11,11 @@ QScriptContext::QScriptContext(JSContext *ctx,
                                JSValueConst this_val,
                                int argc,
                                JSValueConst *argv,
-                               QScriptEngine *engine)
-    : m_ctx(ctx), m_this(JS_DupValue(ctx, this_val)), m_engine(engine)
+                               QScriptEngine *engine, JSValue callee)
+    : m_ctx(ctx),
+    m_this(JS_DupValue(ctx, this_val)),
+    m_engine(engine),
+    m_callee(callee)
 {
     for (int i = 0; i < argc; ++i) {
         m_args.push_back(JS_DupValue(ctx, argv[i]));
@@ -76,8 +79,7 @@ QScriptValue QScriptContext::callee() const
 {
     Q_UNUSED(this);
 
-    // Not implemented: QuickJS does not expose the active callee via public API
-    return QScriptValue();
+    return QScriptValue(m_ctx, m_callee, m_engine);
 }
 
 bool QScriptContext::isCalledAsConstructor() const
