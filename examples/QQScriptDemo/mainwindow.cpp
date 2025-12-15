@@ -706,36 +706,5 @@ void MainWindow::on_pushButton_loadDebug_clicked()
     // 将 debugCode 加载到编辑器；用户可在加载后继续编辑，后续重置不会覆盖当前编辑内容
     codeEditor->setPlainText(debugCode());
 }
-
-void MainWindow::on_pushButton_reset_clicked()
-{
-    // 停止当前执行
-    if(mEngine.isNull() == false)
-    {
-        mEngineAgent->stopDebugging();
-        std::atomic_store(&stop_flag, 1);
-        mEngine->abortEvaluation();
-    }
-
-    // 重置 UI 状态
-    ui->pushButton_start->setVisible(true);
-    ui->pushButton_stop->setVisible(false);
-    ui->pushButton_stepIn->setVisible(false);
-    ui->pushButton_stepOut->setVisible(false);
-    ui->pushButton_stepOver->setVisible(false);
-    ui->pushButton_continue->setVisible(false);
-
-    // 清空日志
-    ui->plainTextEdit->clear();
-
-    // 清除执行箭头
-    codeEditor->clearExecutionArrow();
-
-    // 清除断点视觉效果但保留断点数据
-    // 这样用户可以再次运行时使用之前的断点
-
-    // 清空引擎指针
-    mEngine = nullptr;
-    mEngineAgent = nullptr;
-}
+// reset functionality removed
 

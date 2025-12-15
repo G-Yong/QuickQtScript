@@ -41,7 +41,7 @@ private slots:
 
     void on_pushButton_continue_clicked();
 
-    void on_pushButton_reset_clicked();
+    // reset removed
 
     void on_pushButton_loadDefault_clicked();
     void on_pushButton_loadDebug_clicked();
