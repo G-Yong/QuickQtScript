@@ -401,7 +401,7 @@ QString QScriptValue::toString() const
     else
     {
         // 假如是异常，要特殊处理
-        qDebug() << "is exception";
+        // qDebug() << "is exception";
 
         // wrap exception
         JSValue exception = JS_GetException(m_ctx);
