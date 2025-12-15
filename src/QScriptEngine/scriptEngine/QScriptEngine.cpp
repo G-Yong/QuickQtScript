@@ -452,6 +452,25 @@ QScriptValue QScriptEngine::newArray(uint length)
     return qVal;
 }
 
+// // 又得重新实现一遍quickjs到qt的转换？有没啥方便的方式？
+// QScriptValue QScriptEngine::newFunction(FunctionSignature signature, int length)
+// {
+//     Q_UNUSED(length);
+//     auto functor = [](QScriptContext *context, QScriptEngine *engine, void *) ->QScriptValue {
+//         // return signature(context, engine);
+//         return QScriptValue();
+//     };
+
+//     return registerNativeFunction(functor, nullptr);
+// }
+
+// QScriptValue QScriptEngine::newFunction(FunctionSignature signature,
+//                                         const QScriptValue &prototype,
+//                                         int length)
+// {
+//     return QScriptValue();
+// }
+
 QScriptValue QScriptEngine::newFunction(FunctionWithArgSignature signature, void *arg)
 {
     if (!m_ctx)
