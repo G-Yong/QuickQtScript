@@ -2,8 +2,6 @@
 
 # ----------------------------------------------------------------------------
 
-
-
 *~
 
 *.autosave
@@ -69,7 +67,6 @@ Thumbs.db
 /.qmake.cache
 
 /.qmake.stash
-
 
 
 # qtcreator generated files
@@ -165,4 +162,4 @@ CMakeLists.txt.user*
 
 *build*/
 
-
+.vscode/
