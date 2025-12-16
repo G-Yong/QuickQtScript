@@ -272,7 +272,7 @@ QScriptValue QScriptContext::throwError(const QString &text)
     if (!m_ctx)
         return QScriptValue();
 
-    auto value = JS_ThrowTypeError(m_ctx, "%s", text.toUtf8().constData());
+    auto value = JS_ThrowPlainError(m_ctx, "%s", text.toUtf8().constData());
 
     auto qVal = QScriptValue(m_ctx, value, m_engine);
 
