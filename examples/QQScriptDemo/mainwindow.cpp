@@ -21,6 +21,8 @@
 QScriptValue funcLog(QScriptContext *context, QScriptEngine *engine, void *data);
 QScriptValue funcSleep(QScriptContext *context, QScriptEngine *engine, void *data);
 
+QScriptValue funcQtInfo(QScriptContext *context, QScriptEngine *engine);
+
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
@@ -149,6 +151,9 @@ void MainWindow::on_pushButton_start_clicked()
             // sleep
             engine.globalObject().setProperty("sleep", engine.newFunction(funcSleep, this));
 
+            // qtInfo
+            engine.globalObject().setProperty("qtInfo", engine.newFunction(funcQtInfo));
+
             QString scriptStr = codeEditor->toPlainText();
 
             // auto chkRet = engine.checkSyntax(scriptStr);
@@ -206,6 +211,9 @@ R"(function add(a, b){
 
 var val = add(12, 3)
 console.log(val)
+
+console.log(qtInfo())
+sleep(1)
 
 var c
 var d = 1
@@ -659,6 +667,10 @@ QScriptValue funcSleep(QScriptContext *context, QScriptEngine *engine, void *dat
     return retVal;
 }
 
+QScriptValue funcQtInfo(QScriptContext *context, QScriptEngine *engine)
+{
+    return QString("Qt version:%1").arg(qVersion());
+}
 
 void MainWindow::on_pushButton_stepOver_clicked()
 {
@@ -706,5 +718,5 @@ void MainWindow::on_pushButton_loadDebug_clicked()
     // 将 debugCode 加载到编辑器；用户可在加载后继续编辑，后续重置不会覆盖当前编辑内容
     codeEditor->setPlainText(debugCode());
 }
-// reset functionality removed
+
 

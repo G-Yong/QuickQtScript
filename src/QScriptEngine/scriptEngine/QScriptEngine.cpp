@@ -151,10 +151,11 @@ static JSValue nativeFunctionShim(JSContext *ctx,
         return value;
     }
 
-    QScriptEngine::FunctionWithArgSignature func = nullptr;
+    QScriptEngine::FunctionSignature        func1 = nullptr;
+    QScriptEngine::FunctionWithArgSignature func2 = nullptr;
     void *arg = nullptr;
     JSValue callee;
-    if (!engine->getNativeEntry(magic, func, &arg, callee))
+    if (!engine->getNativeEntry(magic, func1, func2, &arg, callee))
         return JS_UNDEFINED;
 
     // 进入函数
@@ -165,7 +166,15 @@ static JSValue nativeFunctionShim(JSContext *ctx,
     }
 
     QScriptContext qctx(ctx, this_val, argc, argv, engine, callee);
-    QScriptValue res = func(&qctx, engine, arg);
+    QScriptValue res;
+    if(func1 != nullptr)
+    {
+        res = func1(&qctx, engine);
+    }
+    else if(func2 != nullptr)
+    {
+        res = func2(&qctx, engine, arg);
+    }
 
     // 退出函数
     if(agent != nullptr)
@@ -452,17 +461,15 @@ QScriptValue QScriptEngine::newArray(uint length)
     return qVal;
 }
 
-// // 又得重新实现一遍quickjs到qt的转换？有没啥方便的方式？
-// QScriptValue QScriptEngine::newFunction(FunctionSignature signature, int length)
-// {
-//     Q_UNUSED(length);
-//     auto functor = [](QScriptContext *context, QScriptEngine *engine, void *) ->QScriptValue {
-//         // return signature(context, engine);
-//         return QScriptValue();
-//     };
+QScriptValue QScriptEngine::newFunction(FunctionSignature signature, int length)
+{
+    Q_UNUSED(length);
 
-//     return registerNativeFunction(functor, nullptr);
-// }
+    if (!m_ctx)
+        return QScriptValue();
+
+    return registerNativeFunction(signature, nullptr, nullptr);
+}
 
 // QScriptValue QScriptEngine::newFunction(FunctionSignature signature,
 //                                         const QScriptValue &prototype,
@@ -476,7 +483,7 @@ QScriptValue QScriptEngine::newFunction(FunctionWithArgSignature signature, void
     if (!m_ctx)
         return QScriptValue();
 
-    return registerNativeFunction(signature, arg);
+    return registerNativeFunction(nullptr, signature, arg);
 }
 
 QScriptValue QScriptEngine::newVariant(const QVariant &value)
@@ -652,7 +659,8 @@ QScriptValue QScriptEngine::newQObject(const QScriptValue &scriptObject,
     return qVal;
 }
 
-QScriptValue QScriptEngine::registerNativeFunction(FunctionWithArgSignature signature,
+QScriptValue QScriptEngine::registerNativeFunction(FunctionSignature sign1,
+                                                   FunctionWithArgSignature sign2,
                                                    void *arg)
 {
     std::lock_guard<std::mutex> lk(m_nativeFunctionsMutex);
@@ -673,23 +681,25 @@ QScriptValue QScriptEngine::registerNativeFunction(FunctionWithArgSignature sign
 
     JS_FreeValue(m_ctx, fn);
 
-    NativeFunctionEntry e{signature, arg, fn};
+    NativeFunctionEntry e{sign1, sign2, arg, fn};
     m_nativeFunctions.push_back(e);
 
     return qVal;
 }
 
 bool QScriptEngine::getNativeEntry(int idx,
-                                   FunctionWithArgSignature &outFunc,
+                                   FunctionSignature &outSign1,
+                                   FunctionWithArgSignature &outSign2,
                                    void **outArg,
                                    JSValue &callee) const
 {
     std::lock_guard<std::mutex> lk(m_nativeFunctionsMutex);
     if (idx < 0 || idx >= (int)m_nativeFunctions.size())
         return false;
-    outFunc = m_nativeFunctions[idx].func;
-    *outArg = m_nativeFunctions[idx].arg;
-    callee  = m_nativeFunctions[idx].callee;
+    outSign1 = m_nativeFunctions[idx].sign1;
+    outSign2 = m_nativeFunctions[idx].sign2;
+    *outArg  = m_nativeFunctions[idx].arg;
+    callee   = m_nativeFunctions[idx].callee;
     return true;
 }
 
