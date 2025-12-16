@@ -157,7 +157,7 @@ JSCodeEditor::JSCodeEditor(QWidget *parent)
     // 初始化防抖计时器与 prevTextLines
     editDebounceTimer = new QTimer(this);
     editDebounceTimer->setSingleShot(true);
-    editDebounceTimer->setInterval(10); // 防抖
+    editDebounceTimer->setInterval(20); // 防抖
     connect(editDebounceTimer, &QTimer::timeout, this, [this]() {
         emit contentEditedDebounced();
     });

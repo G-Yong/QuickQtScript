@@ -36,7 +36,7 @@ MainWindow::MainWindow(QWidget *parent)
 
 
     codeEditor = new JSCodeEditor();
-    codeEditor->setCodeFoldingEnabled(false); // 代码折叠功能还有大问题，先禁用
+    codeEditor->setCodeFoldingEnabled(true); // 代码折叠功能还有大问题，先禁用
     codeEditor->setExecutionArrowEnabled(true); // 显示当箭头
     codeEditor->setReadOnly(false); // 允许实时编辑脚本内容
     QHBoxLayout *codeEditorLayout = new QHBoxLayout();
