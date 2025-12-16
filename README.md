@@ -26,3 +26,4 @@ include($$PWD/../../src/QScriptEngine/ScriptEngine.pri)
 由于QuickJS官方本身对外并没有提供脚本实时位置（file、line、col）的接口，而这个功能是实现`QScriptEngineAgent`必不可少的，因此，我们对QuickJS的源码的部分文件做了一些更改。
 
 若要查看具体做了哪些修改，可以到仓库[G-Yong/quickjs](https://github.com/G-Yong/quickjs)进行查看
+    
