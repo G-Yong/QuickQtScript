@@ -139,6 +139,8 @@ private:
     int findMatchingBrace(int position, bool forward = true);
     QTextBlock findBlockEnd(QTextBlock startBlock);
     QTextBlock findBlockStart(QTextBlock endBlock);
+    // 根据绝对块号查找 QTextBlock（忽略可见性）
+    QTextBlock blockByNumber(int number) const;
     
     // 计算行的缩进级别
     int getIndentLevel(const QString &text);
