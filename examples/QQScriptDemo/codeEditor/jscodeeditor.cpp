@@ -673,7 +673,7 @@ void JSCodeEditor::toggleFold(int lineNumber)
         unfoldBlock(lineNumber);
     } else {
         // 折叠代码块
-        QTextBlock block = document()->findBlockByLineNumber(lineNumber - 1);
+        QTextBlock block = blockByNumber(lineNumber - 1);
         if (block.isValid() && isBlockStart(block.text().trimmed())) {
             QTextBlock endBlock = findBlockEnd(block);
             if (endBlock.isValid()) {
@@ -754,7 +754,7 @@ void JSCodeEditor::setCurrentExecutionLine(int lineNumber)
     
     // 如果设置了有效的执行行，滚动到该行
     if (lineNumber > 0) {
-        QTextBlock block = document()->findBlockByLineNumber(lineNumber - 1);
+        QTextBlock block = blockByNumber(lineNumber - 1);
         if (block.isValid()) {
             QTextCursor cursor(block);
             setTextCursor(cursor);
@@ -785,10 +785,9 @@ void JSCodeEditor::foldBlock(int startLine, int endLine)
     // 添加到折叠块集合
     foldedBlocks.insert(startLine);
     foldRanges[startLine] = endLine;
-    
     // 隐藏折叠区域内的行
     for (int i = startLine + 1; i <= endLine; ++i) {
-        QTextBlock block = document()->findBlockByLineNumber(i - 1);
+        QTextBlock block = blockByNumber(i - 1);
         if (block.isValid()) {
             block.setVisible(false);
         }
@@ -810,10 +809,9 @@ void JSCodeEditor::unfoldBlock(int startLine)
     foldedBlocks.remove(startLine);
     int endLine = foldRanges.value(startLine, startLine);
     foldRanges.remove(startLine);
-    
     // 显示折叠区域内的行
     for (int i = startLine + 1; i <= endLine; ++i) {
-        QTextBlock block = document()->findBlockByLineNumber(i - 1);
+        QTextBlock block = blockByNumber(i - 1);
         if (block.isValid()) {
             block.setVisible(true);
         }
@@ -907,6 +905,18 @@ QTextBlock JSCodeEditor::findBlockStart(QTextBlock endBlock)
     return QTextBlock();
 }
 
+QTextBlock JSCodeEditor::blockByNumber(int number) const
+{
+    if (number < 0) return QTextBlock();
+    QTextBlock block = document()->firstBlock();
+    while (block.isValid()) {
+        if (block.blockNumber() == number)
+            return block;
+        block = block.next();
+    }
+    return QTextBlock();
+}
+
 QString JSCodeEditor::textUnderCursor() const
 {
     QTextCursor tc = textCursor();
@@ -921,7 +931,7 @@ void LineNumberArea::mousePressEvent(QMouseEvent *event)
 {
     if (event->button() == Qt::LeftButton) {
         QTextCursor cursor = codeEditor->cursorForPosition(
-            QPoint(0, event->pos().y() + codeEditor->verticalScrollBar()->value()));
+            QPoint(0, event->pos().y()));
         int lineNumber = cursor.blockNumber() + 1;
         codeEditor->toggleBreakpoint(lineNumber);
     }
