@@ -2,7 +2,9 @@
 
 #include <QApplication>
 
+#ifdef __TINYC__
 #include "quickjsTest.h"
+#endif
 
 int main(int argc, char *argv[])
 {

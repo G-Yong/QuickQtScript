@@ -70,6 +70,11 @@ public:
     QScriptValue newObject(QScriptClass *scriptClass, const QScriptValue &data = QScriptValue());
     QScriptValue newArray(uint length = 0);
 
+    // // 未实现
+    // typedef QScriptValue (*FunctionSignature)(QScriptContext *, QScriptEngine *);
+    // QScriptValue newFunction(FunctionSignature signature, int length = 0);
+    // QScriptValue newFunction(FunctionSignature signature, const QScriptValue &prototype, int length = 0);
+
     typedef QScriptValue (*FunctionWithArgSignature)(QScriptContext *, QScriptEngine *, void *);
     QScriptValue newFunction(FunctionWithArgSignature signature, void *arg);
 
@@ -88,7 +93,7 @@ public:
     QScriptValue nullValue();
     QScriptValue undefinedValue();
 
-    // 还未实现
+
     static QScriptSyntaxCheckResult checkSyntax(const QString &program);
 
     // template <typename T>
@@ -112,10 +117,12 @@ public:
     }
 
 public:
-    QScriptValue registerNativeFunction(FunctionWithArgSignature signature, void *arg);
     bool getNativeEntry(int idx, FunctionWithArgSignature &outFunc, void **outArg, JSValue &callee) const;
     QObject *qobjectFromJSValue(JSContext *ctx, JSValueConst val) const;
     JSClassID qObjectClassId() const { return m_qobjectClassId; }
+
+private:
+    QScriptValue registerNativeFunction(FunctionWithArgSignature signature, void *arg);
 
 private:
     JSRuntime *m_rt{nullptr};
@@ -133,9 +140,8 @@ private:
 
     // 为engienAgent提供scriptID;
     QStringList mFileNameBuffer;
-
+    // 还未实现
     QScriptContext *mCurCtx{nullptr};
-
     QScriptValue *mGlobalObject{nullptr};
 };
 
