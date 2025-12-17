@@ -41,6 +41,7 @@ public:
     QScriptValue argumentsObject() const;
     QScriptValue callee() const;
     bool isCalledAsConstructor() const;
+    void setCalledAsConstructor(bool called);
     QScriptContext *parentContext() const;
     void setActivationObject(const QScriptValue &activation);
     void setThisObject(const QScriptValue &thisObject);
@@ -65,6 +66,7 @@ private:
     std::vector<JSValue> m_args;
     QScriptEngine *m_engine{nullptr};
     JSValue m_callee;
+    bool m_calledAsConstructor{false};
 };
 
 #endif // QSCRIPTENGINE_QSCRIPTCONTEXT_H

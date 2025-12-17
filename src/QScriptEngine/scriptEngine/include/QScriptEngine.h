@@ -70,10 +70,10 @@ public:
     QScriptValue newObject(QScriptClass *scriptClass, const QScriptValue &data = QScriptValue());
     QScriptValue newArray(uint length = 0);
 
-
     typedef QScriptValue (*FunctionSignature)(QScriptContext *, QScriptEngine *);
     QScriptValue newFunction(FunctionSignature signature, int length = 0);
-    // QScriptValue newFunction(FunctionSignature signature, const QScriptValue &prototype, int length = 0);// 未实现
+    // 未实现
+    QScriptValue newFunction(FunctionSignature signature, const QScriptValue &prototype, int length = 0);
 
     typedef QScriptValue (*FunctionWithArgSignature)(QScriptContext *, QScriptEngine *, void *);
     QScriptValue newFunction(FunctionWithArgSignature signature, void *arg);
@@ -117,18 +117,12 @@ public:
     }
 
 public:
-    bool getNativeEntry(int idx,
-                        FunctionSignature &outSign1,
-                        FunctionWithArgSignature &outSign2,
-                        void **outArg,
-                        JSValue &callee) const;
+    bool getNativeEntry(int idx, FunctionWithArgSignature &outFunc, void **outArg, JSValue &callee) const;
     QObject *qobjectFromJSValue(JSContext *ctx, JSValueConst val) const;
     JSClassID qObjectClassId() const { return m_qobjectClassId; }
 
 private:
-    QScriptValue registerNativeFunction(FunctionSignature sign1,
-                                        FunctionWithArgSignature sign2,
-                                        void *arg);
+    QScriptValue registerNativeFunction(FunctionWithArgSignature signature, void *arg, int length = 0, int cproto = JS_CFUNC_generic_magic);
 
 private:
     JSRuntime *m_rt{nullptr};
@@ -137,9 +131,8 @@ private:
     JSClassID m_qobjectClassId{0};
     std::atomic<int> m_evalCount{0};
     struct NativeFunctionEntry {
-        FunctionSignature        sign1 = nullptr;
-        FunctionWithArgSignature sign2 = nullptr;
-        void *arg = nullptr;
+        FunctionWithArgSignature func;
+        void *arg;
         JSValue callee;
     };
     std::vector<NativeFunctionEntry> m_nativeFunctions;

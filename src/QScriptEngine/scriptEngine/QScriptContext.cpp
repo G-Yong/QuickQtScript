@@ -26,7 +26,9 @@ QScriptContext::~QScriptContext()
 {
     if(m_ctx)
     {
-        JS_FreeValue(m_ctx, m_this);
+        if (!JS_IsUndefined(m_this) && !JS_IsNull(m_this)) {
+            JS_FreeValue(m_ctx, m_this);
+        }
 
         if (!JS_IsUndefined(m_activation)) {
             JS_FreeValue(m_ctx, m_activation);
@@ -84,11 +86,12 @@ QScriptValue QScriptContext::callee() const
 
 bool QScriptContext::isCalledAsConstructor() const
 {
-    // QuickJS C API doesn't provide a direct public call-state query here
-    // in this wrapper. As an approximation we return false. If needed,
-    // native shim can pass new_target information to the context.
+    return m_calledAsConstructor;
+}
 
-    return false;
+void QScriptContext::setCalledAsConstructor(bool called)
+{
+    m_calledAsConstructor = called;
 }
 
 QScriptContext *QScriptContext::parentContext() const
@@ -115,7 +118,7 @@ void QScriptContext::setThisObject(const QScriptValue &thisObject)
 {
     if (!m_ctx)
         return;
-    if (!JS_IsUndefined(m_this)) {
+    if (!JS_IsUndefined(m_this) && !JS_IsNull(m_this)) {
         JS_FreeValue(m_ctx, m_this);
     }
     if (thisObject.isValid())
