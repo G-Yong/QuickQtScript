@@ -37,6 +37,10 @@ public:
                    JSValueConst callee);
     ~QScriptContext();
 
+    // 禁止拷贝构造函数以及拷贝赋值运算符
+    QScriptContext(const QScriptContext&) = delete;
+    QScriptContext& operator=(const QScriptContext&) = delete;
+
     QScriptValue activationObject() const;
     QScriptValue argumentsObject() const;
     QScriptValue callee() const;
