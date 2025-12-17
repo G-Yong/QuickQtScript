@@ -88,8 +88,8 @@ struct QObjectWrapper {
     QObject *obj;
     QScriptEngine::ValueOwnership ownership;
 
-    QList<ObjectProp>   propList;
-    QList<ObjectMethod> methodList;
+    QList<ObjectProp*>   propList;
+    QList<ObjectMethod*> methodList;
 };
 static JSClassID s_qobjectClassId = 0;
 static void qobject_finalizer(JSRuntime *rt, JSValueConst val)
@@ -108,6 +108,16 @@ static void qobject_finalizer(JSRuntime *rt, JSValueConst val)
             w->obj = nullptr;
         }
     }
+    // free heap-allocated props and methods
+    for (auto pp : w->propList) {
+        delete pp;
+    }
+    w->propList.clear();
+    for (auto mm : w->methodList) {
+        delete mm;
+    }
+    w->methodList.clear();
+
     delete w;
     JS_SetOpaque(val, nullptr);
 }
@@ -190,6 +200,7 @@ static JSValue nativeFunctionShim(JSContext *ctx,
     // 如果返回的是 undefined/null 或 无效值，且这是构造调用（new Foo()），
     // 则应返回 thisObject()（遵循 Qt 的 QScriptBehavior）。
     if (!res.isValid() || res.isUndefined()) {
+        // qDebug() << !res.isValid() << res.isUndefined();
         if (qctx.isCalledAsConstructor()) {
             QScriptValue thisObj = qctx.thisObject();
             if (thisObj.isValid()) {
@@ -569,9 +580,11 @@ QScriptValue QScriptEngine::newQObject(QObject *object,
     auto metaObj = object->metaObject();
     for (int i = 0; i < metaObj->propertyCount(); ++i) {
         auto prop = metaObj->property(i);
-        w->propList << ObjectProp{object, prop};
+        ObjectProp *pp = new ObjectProp{object, prop};
+        w->propList << pp;
         // 使用setter/getter实现
         // 只能使用[]，不能使用[=]、[&]，否则签名对不上
+        // qDebug() << prop.name();
         qVal.setProperty(prop.name(), this->newFunction([](QScriptContext *context, QScriptEngine *engine, void *data)->QScriptValue {
             ObjectProp *objProp = static_cast<ObjectProp*>(data);
             if(objProp == nullptr)
@@ -593,7 +606,7 @@ QScriptValue QScriptEngine::newQObject(QObject *object,
 
             return QScriptValue();
 
-        }, &w->propList.last()), QScriptValue::PropertyGetter | QScriptValue::PropertySetter);
+        }, pp), QScriptValue::PropertyGetter | QScriptValue::PropertySetter);
     }
 
     // 枚举对象所有槽函数
@@ -616,10 +629,11 @@ QScriptValue QScriptEngine::newQObject(QObject *object,
             continue;
             break;
         }
-        w->methodList << ObjectMethod{object, method};
+        ObjectMethod *mm = new ObjectMethod{object, method};
+        w->methodList << mm;
 
         // qDebug() << "method"
-        //          << method.name()
+        //          << method.name();
         //          << method.typeName()
         //          << method.methodSignature()
         //          << method.parameterNames()
@@ -646,7 +660,7 @@ QScriptValue QScriptEngine::newQObject(QObject *object,
 
             return QScriptValue(ret);
 
-        }, &w->methodList.last()));
+        }, mm));
 
     }
 
@@ -682,6 +696,62 @@ QScriptValue QScriptEngine::newQObject(const QScriptValue &scriptObject,
     JS_FreeValue(m_ctx, wrapper);
 
     return qVal;
+}
+
+QScriptValue QScriptEngine::defaultPrototype(int metaTypeId) const
+{
+    if (!m_ctx)
+        return QScriptValue();
+    auto it = m_defaultPrototypes.find(metaTypeId);
+    if (it == m_defaultPrototypes.end())
+        return QScriptValue();
+    return it.value();
+}
+
+void QScriptEngine::setDefaultPrototype(int metaTypeId, const QScriptValue &prototype)
+{
+    if (!m_ctx)
+        return;
+    // store a copy of the prototype QScriptValue
+    if (prototype.isValid())
+        m_defaultPrototypes.insert(metaTypeId, prototype);
+    else
+        m_defaultPrototypes.remove(metaTypeId);
+}
+
+QScriptValue QScriptEngine::toScriptValue(const QVariant &value)
+{
+    if (!m_ctx)
+        return QScriptValue();
+
+    // For simple QVariant types, keep current behavior
+    if (value.type() == QVariant::String || value.type() == QVariant::Bool || value.canConvert<double>()) {
+        return QScriptValue(value);
+    }
+
+    // For user types, create an object and apply default prototype if available
+    JSValue obj = JS_NewObject(m_ctx);
+    if (JS_IsException(obj))
+        return QScriptValue();
+
+    QScriptValue qObj(m_ctx, obj, this);
+
+    int mt = value.userType();
+    auto it = m_defaultPrototypes.find(mt);
+    if (it != m_defaultPrototypes.end()) {
+        QScriptValue proto = it.value();
+        if (proto.isValid()) {
+            JS_SetPrototype(m_ctx, obj, proto.rawValue());
+        }
+    }
+
+    JS_FreeValue(m_ctx, obj);
+    return qObj;
+}
+
+void QScriptEngine::clearDefaultPrototypes()
+{
+    m_defaultPrototypes.clear();
 }
 
 QScriptValue QScriptEngine::registerNativeFunction(FunctionWithArgSignature signature,

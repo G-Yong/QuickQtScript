@@ -33,6 +33,7 @@ INCLUDEPATH += $$PWD/scriptEngine/include
 
 
 HEADERS += \
+    $$PWD/../../examples/QQScriptDemo/barprototype.h \
     $$PWD/quickjs/cutils.h \
     $$PWD/quickjs/dtoa.h \
     $$PWD/quickjs/libregexp-opcode.h \
@@ -61,7 +62,7 @@ win32: {
        #define DIRECT_DISPATCH  1
        #endif
     # 也就意味着在Linux下，DIRECT_DISPATCH会被定义为1
-    # 经过测试，这样会导致JS_CallInternal()只被调用一次，从是我们的机制失效
+    # 经过测试，这样会导致JS_CallInternal()只被调用一次，从而使我们的机制失效
     # 因此需要强行让其使用  #define DIRECT_DISPATCH  0
     DEFINES += EMSCRIPTEN
 }

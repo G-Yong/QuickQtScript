@@ -391,12 +391,28 @@ QString QScriptValue::toString() const
     if(JS_IsException(m_value) == false)
     {
         JSValue s = JS_ToString(m_ctx, m_value);
-        const char *c = JS_ToCString(m_ctx, s);
+        if (JS_IsException(s))  // 有可能调用toString()失败
+        {
+            JSValue exception = JS_GetException(m_ctx);
+            JSValue ss = JS_ToString(m_ctx, exception);
+            const char *c = JS_ToCString(m_ctx, ss);
+            res += QString::fromUtf8(c ? c : "");
 
-        res = QString::fromUtf8(c ? c : "");
+            JS_FreeCString(m_ctx, c);
+            JS_FreeValue(m_ctx, ss);
+            JS_FreeValue(m_ctx, s);
+            JS_Throw(m_ctx, exception);
+        }
+        else
+        {
+            const char *c = JS_ToCString(m_ctx, s);
 
-        JS_FreeCString(m_ctx, c);
-        JS_FreeValue(m_ctx, s);
+            res = QString::fromUtf8(c ? c : "");
+
+            JS_FreeCString(m_ctx, c);
+            JS_FreeValue(m_ctx, s);
+        }
+
     }
     else
     {

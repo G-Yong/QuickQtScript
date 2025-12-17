@@ -18,6 +18,7 @@ extern "C" {
 
 #include <QScriptValue>
 #include <QScriptSyntaxCheckResult>
+#include <QHash>
 
 class QScriptEngineAgent;
 class QScriptContext;
@@ -72,7 +73,7 @@ public:
 
     typedef QScriptValue (*FunctionSignature)(QScriptContext *, QScriptEngine *);
     QScriptValue newFunction(FunctionSignature signature, int length = 0);
-    // 未实现
+    // 部分功能待实现
     QScriptValue newFunction(FunctionSignature signature, const QScriptValue &prototype, int length = 0);
 
     typedef QScriptValue (*FunctionWithArgSignature)(QScriptContext *, QScriptEngine *, void *);
@@ -81,9 +82,11 @@ public:
     QScriptValue newVariant(const QVariant &value);
     QScriptValue newVariant(const QScriptValue &object, const QVariant &value);
 
-    // 目前这两个函数还存在重大隐患，暂时不建议使用
     QScriptValue newQObject(QObject *object, QScriptEngine::ValueOwnership ownership = QtOwnership, const QScriptEngine::QObjectWrapOptions &options = QObjectWrapOptions());
     QScriptValue newQObject(const QScriptValue &scriptObject, QObject *qtObject, QScriptEngine::ValueOwnership ownership = QtOwnership, const QScriptEngine::QObjectWrapOptions &options = QObjectWrapOptions());
+
+    QScriptValue defaultPrototype(int metaTypeId) const;
+    void setDefaultPrototype(int metaTypeId, const QScriptValue &prototype);
 
     bool hasUncaughtException() const;
     QScriptValue uncaughtException() const;
@@ -101,8 +104,13 @@ public:
     template<typename T>
     QScriptValue toScriptValue(const T &value) {
         QVariant var = QVariant::fromValue(value);
-        return QScriptValue(var);
+        // return QScriptValue(value);
+        return toScriptValue(var);
     }
+
+    // Convert a QVariant into a QScriptValue, applying default prototype
+    QScriptValue toScriptValue(const QVariant &value);
+    void clearDefaultPrototypes();
 
 
     /* 以下接口仅供内部使用，请勿在类外或者子类中使用 */
@@ -140,9 +148,9 @@ private:
 
     // 为engienAgent提供scriptID;
     QStringList mFileNameBuffer;
-    // 还未实现
-    QScriptContext *mCurCtx{nullptr};
+    QScriptContext *mCurCtx{nullptr};     // 还未实现
     QScriptValue *mGlobalObject{nullptr};
+    QHash<int, QScriptValue> m_defaultPrototypes;
 };
 
 

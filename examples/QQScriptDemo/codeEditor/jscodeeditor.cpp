@@ -84,7 +84,7 @@ JSSyntaxHighlighter::JSSyntaxHighlighter(QTextDocument *parent)
 
     // 字符串格式
     quotationFormat.setForeground(QColor(206, 145, 120)); // 橙色
-    rule.pattern = QRegularExpression("\".*\"|'.*'|`.*`");
+    rule.pattern = QRegularExpression("\".*?\"|'.*?'|`.*?`");
     rule.format = quotationFormat;
     highlightingRules.append(rule);
 

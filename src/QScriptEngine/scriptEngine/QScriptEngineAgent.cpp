@@ -92,6 +92,8 @@ QScriptEngineAgent::QScriptEngineAgent(QScriptEngine *engine)
 
 QScriptEngineAgent::~QScriptEngineAgent()
 {
+    if (m_engine)
+        m_engine->clearDefaultPrototypes();
 }
 
 void QScriptEngineAgent::contextPop()
