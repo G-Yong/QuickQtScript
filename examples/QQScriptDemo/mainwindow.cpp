@@ -20,8 +20,8 @@
 
 QScriptValue funcLog(QScriptContext *context, QScriptEngine *engine, void *data);
 QScriptValue funcSleep(QScriptContext *context, QScriptEngine *engine, void *data);
-
-QScriptValue funcQtInfo(QScriptContext *context, QScriptEngine *engine);
+QScriptValue funcWithoutData(QScriptContext *context, QScriptEngine *engine);
+QScriptValue Foo(QScriptContext *context, QScriptEngine *engine);
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -151,8 +151,24 @@ void MainWindow::on_pushButton_start_clicked()
             // sleep
             engine.globalObject().setProperty("sleep", engine.newFunction(funcSleep, this));
 
-            // qtInfo
-            engine.globalObject().setProperty("qtInfo", engine.newFunction(funcQtInfo));
+            // 测试带 prototype 的构造器/工厂函数
+            QScriptValue fooProto = engine.newObject();
+            fooProto.setProperty("whatever", engine.newVariant(QString("protoVal")));
+            engine.globalObject().setProperty("Foo", engine.newFunction(Foo, fooProto));
+
+            // 测试脚本：new 调用与普通调用
+            engine.evaluate(
+R"(
+var a = new Foo();
+console.log('a.bar=', a.bar);
+var b = Foo();
+console.log('b.baz=', b.baz);
+)", JS_FILE_NAME);
+
+            // // 测试 callPure FunctionSignature 接口
+            // engine.globalObject().setProperty("callPure", engine.newFunction(funcWithoutData));
+            // // 直接调用以验证功能
+            // engine.evaluate("console.log('callPure->', callPure(666));", JS_FILE_NAME);
 
             QString scriptStr = codeEditor->toPlainText();
 
@@ -199,6 +215,39 @@ void MainWindow::on_pushButton_stop_clicked()
         mEngineAgent->stopDebugging();
         std::atomic_store(&stop_flag, 1);
         mEngine->abortEvaluation();
+    }
+}
+
+QScriptValue funcWithoutData(QScriptContext *context, QScriptEngine *engine)
+{
+    // Q_UNUSED(context);
+    // Q_UNUSED(engine);
+    qDebug() << "call without userdata";
+    qDebug() << "argumentCount " << context->argumentCount();
+    qDebug() << "argument 0 is " << context->argument(0).toInt32();
+    return QScriptValue(QString("hello from funcWithoutData"));
+}
+
+QScriptValue Foo(QScriptContext *context, QScriptEngine *engine)
+{
+    if (!context || !engine)
+        return QScriptValue();
+
+    if (context->isCalledAsConstructor()) {
+        // initialize the new object (thisObject refers to the new instance)
+        context->thisObject().setProperty("bar", engine->newVariant(QString("from ctor")));
+        return engine->undefinedValue();
+    } else {
+        // not called as constructor: create and return our own object
+        QScriptValue object = engine->newObject();
+        QScriptValue callee = context->callee();
+        QScriptValue proto = callee.property("prototype");
+        if (proto.isValid()) {
+            // set prototype using QuickJS API
+            JS_SetPrototype(engine->ctx(), object.rawValue(), proto.rawValue());
+        }
+        object.setProperty("baz", engine->newVariant(QString("from call")));
+        return object;
     }
 }
 

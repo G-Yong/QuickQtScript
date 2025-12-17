@@ -166,15 +166,10 @@ static JSValue nativeFunctionShim(JSContext *ctx,
     }
 
     QScriptContext qctx(ctx, this_val, argc, argv, engine, callee);
-    QScriptValue res;
-    if(func1 != nullptr)
-    {
-        res = func1(&qctx, engine);
-    }
-    else if(func2 != nullptr)
-    {
-        res = func2(&qctx, engine, arg);
-    }
+    // detect whether function was called as constructor
+    bool calledAsCtor = JS_IsConstructor(ctx, this_val);
+    qctx.setCalledAsConstructor(calledAsCtor);
+    QScriptValue res = func(&qctx, engine, arg);
 
     // 退出函数
     if(agent != nullptr)
@@ -189,20 +184,39 @@ static JSValue nativeFunctionShim(JSContext *ctx,
     //          << res.toString();
 
     // 假如返回值是普通值，需要构建成JSValue
-    if(res.isVariant())
-    {
+    if (res.isVariant()) {
         return QScriptValue::toJSValue(ctx, res.data());
     }
 
-    // Don't use the C++ '!' operator on JSValue; instead check validity/undefined
-    if (!res.isValid() || res.isUndefined())
+    // 如果返回的是 undefined/null 或 无效值，且这是构造调用（new Foo()），
+    // 则应返回 thisObject()（遵循 Qt 的 QScriptBehavior）。
+    if (!res.isValid() || res.isUndefined()) {
+        if (qctx.isCalledAsConstructor()) {
+            QScriptValue thisObj = qctx.thisObject();
+            if (thisObj.isValid()) {
+                return JS_DupValue(ctx, thisObj.rawValue());
+            }
+        }
         return JS_UNDEFINED;
+    }
 
-    // qDebug() << "return dup";
-
+    // 有效的 JS 值，直接 dup 并返回
     auto val = JS_DupValue(ctx, res.rawValue());
-
     return val;
+}
+
+// Adapter: wrap old FunctionSignature into FunctionWithArgSignature
+static QScriptValue functionSignatureAdapter(QScriptContext *context, QScriptEngine *engine, void *arg)
+{
+    if (!arg)
+        return QScriptValue();
+
+    // arg stores the FunctionSignature as a pointer-sized value
+    auto sig = reinterpret_cast<QScriptEngine::FunctionSignature>(arg);
+    if (!sig)
+        return QScriptValue();
+
+    return sig(context, engine);
 }
 
 QScriptEngine::QScriptEngine(QObject *parent)
@@ -461,29 +475,41 @@ QScriptValue QScriptEngine::newArray(uint length)
     return qVal;
 }
 
+
 QScriptValue QScriptEngine::newFunction(FunctionSignature signature, int length)
 {
-    Q_UNUSED(length);
-
     if (!m_ctx)
         return QScriptValue();
 
-    return registerNativeFunction(signature, nullptr, nullptr);
+    // Wrap the FunctionSignature into a FunctionWithArgSignature via adapter.
+    void *arg = reinterpret_cast<void *>(signature);
+    return registerNativeFunction(functionSignatureAdapter, arg, length, JS_CFUNC_constructor_or_func_magic);
 }
 
-// QScriptValue QScriptEngine::newFunction(FunctionSignature signature,
-//                                         const QScriptValue &prototype,
-//                                         int length)
-// {
-//     return QScriptValue();
-// }
+QScriptValue QScriptEngine::newFunction(FunctionSignature signature,
+                                        const QScriptValue &prototype,
+                                        int length)
+{
+    if (!m_ctx)
+        return QScriptValue();
+
+    void *arg = reinterpret_cast<void *>(signature);
+    QScriptValue fn = registerNativeFunction(functionSignatureAdapter, arg, length, JS_CFUNC_constructor_or_func_magic);
+
+    if (prototype.isValid()) {
+        // set function prototype using QuickJS constructor helper
+        JS_SetConstructor(m_ctx, fn.rawValue(), prototype.rawValue());
+    }
+
+    return fn;
+}
 
 QScriptValue QScriptEngine::newFunction(FunctionWithArgSignature signature, void *arg)
 {
     if (!m_ctx)
         return QScriptValue();
 
-    return registerNativeFunction(nullptr, signature, arg);
+    return registerNativeFunction(signature, arg, 0, JS_CFUNC_generic_magic);
 }
 
 QScriptValue QScriptEngine::newVariant(const QVariant &value)
@@ -659,9 +685,10 @@ QScriptValue QScriptEngine::newQObject(const QScriptValue &scriptObject,
     return qVal;
 }
 
-QScriptValue QScriptEngine::registerNativeFunction(FunctionSignature sign1,
-                                                   FunctionWithArgSignature sign2,
-                                                   void *arg)
+QScriptValue QScriptEngine::registerNativeFunction(FunctionWithArgSignature signature,
+                                                   void *arg,
+                                                   int length,
+                                                   int cproto)
 {
     std::lock_guard<std::mutex> lk(m_nativeFunctionsMutex);
 
@@ -673,8 +700,8 @@ QScriptValue QScriptEngine::registerNativeFunction(FunctionSignature sign1,
     JSValue fn = JS_NewCFunctionMagic(m_ctx,
                                       nativeFunctionShim,
                                       "native",
-                                      0,
-                                      JS_CFUNC_generic_magic,
+                                      length,
+                                      (JSCFunctionEnum)cproto,
                                       magicCode);
 
     QScriptValue qVal = QScriptValue(m_ctx, fn, this);
