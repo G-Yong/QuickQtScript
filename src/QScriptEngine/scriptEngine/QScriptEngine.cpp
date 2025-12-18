@@ -88,8 +88,8 @@ struct QObjectWrapper {
     QObject *obj;
     QScriptEngine::ValueOwnership ownership;
 
-    QList<ObjectProp*>   propList;
-    QList<ObjectMethod*> methodList;
+    QList<ObjectProp>   propList;
+    QList<ObjectMethod> methodList;
 };
 static JSClassID s_qobjectClassId = 0;
 static void qobject_finalizer(JSRuntime *rt, JSValueConst val)
@@ -108,14 +108,8 @@ static void qobject_finalizer(JSRuntime *rt, JSValueConst val)
             w->obj = nullptr;
         }
     }
-    // free heap-allocated props and methods
-    for (auto pp : w->propList) {
-        delete pp;
-    }
+    // clear lists (no heap allocations for elements)
     w->propList.clear();
-    for (auto mm : w->methodList) {
-        delete mm;
-    }
     w->methodList.clear();
 
     delete w;
@@ -297,6 +291,7 @@ QScriptEngine::QScriptEngine(QObject *parent)
 
 QScriptEngine::~QScriptEngine()
 {
+    clearDefaultPrototypes(); // 首先清空存储的默认类型，不然会崩溃
     if(agent() != nullptr)
     {
         // 这里会导致程序崩溃，后面再处理
@@ -578,10 +573,12 @@ QScriptValue QScriptEngine::newQObject(QObject *object,
     // 创建好对象后，还得将QObject携带的属性、槽函数注册进去（信号比较麻烦，先不实现了）
     // 枚举对象的所有属性
     auto metaObj = object->metaObject();
+    // reserve to avoid QList reallocation while taking element addresses
+    w->propList.reserve(metaObj->propertyCount());
+    w->methodList.reserve(metaObj->methodCount());
     for (int i = 0; i < metaObj->propertyCount(); ++i) {
         auto prop = metaObj->property(i);
-        ObjectProp *pp = new ObjectProp{object, prop};
-        w->propList << pp;
+        w->propList << ObjectProp{object, prop};
         // 使用setter/getter实现
         // 只能使用[]，不能使用[=]、[&]，否则签名对不上
         // qDebug() << prop.name();
@@ -606,7 +603,7 @@ QScriptValue QScriptEngine::newQObject(QObject *object,
 
             return QScriptValue();
 
-        }, pp), QScriptValue::PropertyGetter | QScriptValue::PropertySetter);
+        }, &w->propList.last()), QScriptValue::PropertyGetter | QScriptValue::PropertySetter);
     }
 
     // 枚举对象所有槽函数
@@ -629,8 +626,7 @@ QScriptValue QScriptEngine::newQObject(QObject *object,
             continue;
             break;
         }
-        ObjectMethod *mm = new ObjectMethod{object, method};
-        w->methodList << mm;
+        w->methodList << ObjectMethod{object, method};
 
         // qDebug() << "method"
         //          << method.name();
@@ -660,7 +656,7 @@ QScriptValue QScriptEngine::newQObject(QObject *object,
 
             return QScriptValue(ret);
 
-        }, mm));
+        }, &w->methodList.last()));
 
     }
 

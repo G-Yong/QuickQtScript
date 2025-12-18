@@ -33,7 +33,6 @@ INCLUDEPATH += $$PWD/scriptEngine/include
 
 
 HEADERS += \
-    $$PWD/../../examples/QQScriptDemo/barprototype.h \
     $$PWD/quickjs/cutils.h \
     $$PWD/quickjs/dtoa.h \
     $$PWD/quickjs/libregexp-opcode.h \
