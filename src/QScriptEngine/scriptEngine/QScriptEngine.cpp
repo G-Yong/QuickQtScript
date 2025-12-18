@@ -47,6 +47,9 @@ struct ObjectMethod
 
         // Qt最多支持10个参数的，后面再补上
         switch (argList.length()) {
+        case 0: // 添加无参数的情况
+            success = method.invoke(object, retVal);
+            break;
         case 1:
             success = method.invoke(object, retVal, argList[0]);
             break;
@@ -737,7 +740,8 @@ QScriptValue QScriptEngine::toScriptValue(const QVariant &value)
     if (it != m_defaultPrototypes.end()) {
         QScriptValue proto = it.value();
         if (proto.isValid()) {
-            JS_SetPrototype(m_ctx, obj, proto.rawValue());
+            // use QScriptValue API to avoid direct QuickJS calls in callers
+            qObj.setPrototype(proto);
         }
     }
 

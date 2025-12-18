@@ -1,4 +1,4 @@
-#ifndef BARPROTOTYPE_H
+﻿#ifndef BARPROTOTYPE_H
 #define BARPROTOTYPE_H
 
 #include <QObject>
