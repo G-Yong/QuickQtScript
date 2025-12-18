@@ -83,6 +83,7 @@ public:
 
     QScriptValue property(const QString &name) const;
     QScriptValue property(quint32 arrayIndex) const;
+    QScriptValue prototype() const;
 
 
     void setProperty(const QString &name,
@@ -94,6 +95,8 @@ public:
     void setProperty(const char *name,
                      const QScriptValue &value,
                      const PropertyFlags &flags = KeepExistingFlags);
+
+    void setPrototype(const QScriptValue &prototype);
 
     bool strictlyEquals(const QScriptValue &other) const;
 

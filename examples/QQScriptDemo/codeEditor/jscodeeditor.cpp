@@ -12,6 +12,7 @@
 #include <QAbstractItemView>
 #include <QDebug>
 #include <QTimer>
+#include <Qsci/qsciscintilla.h>
 
 //==============================================================================
 //  JavaScript语法高亮器实现

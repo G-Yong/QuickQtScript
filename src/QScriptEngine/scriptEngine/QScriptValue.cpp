@@ -201,6 +201,17 @@ QScriptValue QScriptValue::property(quint32 arrayIndex) const
     return qVal;
 }
 
+QScriptValue QScriptValue::prototype() const
+{
+    if (!m_ctx)
+        return QScriptValue();
+
+    JSValue proto = JS_GetPrototype(m_ctx, m_value);
+    QScriptValue qProto(m_ctx, proto, m_engine);
+    JS_FreeValue(m_ctx, proto);
+    return qProto;
+}
+
 void QScriptValue::setProperty(const char *name, const QScriptValue &value, const PropertyFlags &flags)
 {
     setProperty(QString(name), value, flags);
@@ -307,6 +318,19 @@ void QScriptValue::setProperty(quint32 arrayIndex, const QScriptValue &value, co
     // qDebug() << "set array prop--->" << arrayIndex << value.toString() << value.isVariant();
 
     JS_DefinePropertyValueUint32(m_ctx, m_value, arrayIndex, val_to_set, JS_PROP_C_W_E);
+}
+
+void QScriptValue::setPrototype(const QScriptValue &prototype)
+{
+    if (!m_ctx)
+        return;
+    JSValue protoVal = JS_UNDEFINED;
+    if (prototype.isValid())
+        protoVal = JS_DupValue(m_ctx, prototype.rawValue());
+    // JS_SetPrototype takes a JSValueConst; it does not dup the value
+    JS_SetPrototype(m_ctx, m_value, protoVal);
+    if (!JS_IsUndefined(protoVal))
+        JS_FreeValue(m_ctx, protoVal);
 }
 
 bool QScriptValue::strictlyEquals(const QScriptValue &other) const

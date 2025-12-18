@@ -17,8 +17,8 @@
 
 // Simple C++ type for testing defaultPrototype
 struct Bar {
-    QString name;
-    int value{0};
+    // QString name;
+    // int value{0};
 };
 Q_DECLARE_METATYPE(Bar)
 
@@ -50,7 +50,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     codeEditor = new JSCodeEditor();
     codeEditor->setCodeFoldingEnabled(true); // 代码折叠功能
-    codeEditor->setExecutionArrowEnabled(true); // 显示当箭头
+    codeEditor->setExecutionArrowEnabled(true); // 显示箭头
     codeEditor->setReadOnly(false); // 允许实时编辑脚本内容
     QHBoxLayout *codeEditorLayout = new QHBoxLayout();
     codeEditorLayout->setMargin(0);
@@ -167,10 +167,10 @@ void MainWindow::on_pushButton_start_clicked()
             engine.setDefaultPrototype(qMetaTypeId<Bar>(), barProto);
             QScriptValue barCtor = engine.newFunction(constructBar, barProto);
             // set constructor.prototype to the prototype object
-            barCtor.setProperty("prototype", barProto);
+            // barCtor.setProperty("prototype", barProto);
             engine.globalObject().setProperty("Bar", barCtor);
 
-            // funcWithoutData
+            // 测试无带参函数签名注册功能
             engine.globalObject().setProperty("callPure", engine.newFunction(funcWithoutData));
 
 
@@ -238,9 +238,9 @@ QScriptValue funcWithoutData(QScriptContext *context, QScriptEngine *engine)
 {
     // Q_UNUSED(context);
     // Q_UNUSED(engine);
-    qDebug() << "call without userdata";
-    qDebug() << "argumentCount " << context->argumentCount();
-    qDebug() << "argument 0 is " << context->argument(0).toInt32();
+    // qDebug() << "call without userdata";
+    // qDebug() << "argumentCount " << context->argumentCount();
+    // qDebug() << "argument 0 is " << context->argument(0).toInt32();
     return QScriptValue(QString("hello from funcWithoutData"));
 }
 
@@ -250,33 +250,8 @@ QScriptValue constructBar(QScriptContext *context, QScriptEngine *engine)
         return QScriptValue();
     // create C++ Bar value (could initialize from context arguments)
     Bar bar;
-    if (context->argumentCount() > 0) {
-        bar.name = context->argument(0).toString();
-    }
-    if (context->argumentCount() > 1) {
-        bar.name = context->argument(1).toInt32();
-    }
 
-    if (context->isCalledAsConstructor()) {
-        // initialize the new object (thisObject refers to the new instance)
-        context->thisObject().setProperty("fromCtor", engine->newVariant(QString("constructed")));
-        // attach any initial data if desired
-        context->thisObject().setProperty("name", engine->newVariant(bar.name));
-        context->thisObject().setProperty("value", engine->newVariant(bar.value));
-        return engine->undefinedValue();
-    } else {
-        // not called as constructor: create and return our own object
-        QScriptValue object = engine->newObject();
-        // set prototype using defaultPrototype if available
-        QScriptValue proto = engine->defaultPrototype(qMetaTypeId<Bar>());
-        if (proto.isValid()) {
-            JS_SetPrototype(engine->ctx(), object.rawValue(), proto.rawValue());
-        }
-        // expose data
-        object.setProperty("val", engine->newVariant(bar.value));
-        object.setProperty("name", engine->newVariant(bar.name));
-        return object;
-    }
+    return engine->toScriptValue(bar);
 }
 
 QScriptValue Foo(QScriptContext *context, QScriptEngine *engine)
@@ -294,8 +269,8 @@ QScriptValue Foo(QScriptContext *context, QScriptEngine *engine)
         QScriptValue callee = context->callee();
         QScriptValue proto = callee.property("prototype");
         if (proto.isValid()) {
-            // set prototype using QuickJS API
-            JS_SetPrototype(engine->ctx(), object.rawValue(), proto.rawValue());
+            // set prototype using engine API
+            object.setPrototype(proto);
         }
         object.setProperty("baz", engine->newVariant(QString("from call")));
         return object;
@@ -392,15 +367,13 @@ var a = new Foo();
 console.log('a.bar=', a.bar);
 var b = Foo();
 console.log('b.baz=', b.baz);
-// ==================== prototype注册测试 ====================
-console.log("\n===== prototype注册测试 =====");
+// ==================== 原型注册测试 ====================
+console.log("\n===== 原型注册测试 =====");
 var c = new Bar();
-console.log('c.fromCtor=', c.fromCtor);
-console.log(typeof c.greet === 'function'); // true
+// console.log(typeof c.greet === 'function'); // true
 console.log('c.greet=', typeof c.greet === 'function' ? c.greet() : c.greet);
 var d = Bar();
-console.log('d.val=', d.val);
-console.log(typeof Bar.prototype.greet === 'function'); // true
+// console.log(typeof Bar.prototype.greet === 'function'); // true
 console.log('Bar.prototype.greet=', typeof Bar.prototype.greet === 'function' ? Bar.prototype.greet() : Bar.prototype.greet);
 // ==================== 变量测试 ====================
 // 基本变量声明和赋值
