@@ -12,6 +12,16 @@
 
 // #include "myqobject.h"
 
+#include <QMetaType>
+#include "barprototype.h"
+
+// Simple C++ type for testing defaultPrototype
+struct Bar {
+    QString name;
+    int value{0};
+};
+Q_DECLARE_METATYPE(Bar)
+
 #define JS_FILE_NAME "main.js"
 
 #ifdef Q_OS_WIN
@@ -22,6 +32,7 @@ QScriptValue funcLog(QScriptContext *context, QScriptEngine *engine, void *data)
 QScriptValue funcSleep(QScriptContext *context, QScriptEngine *engine, void *data);
 QScriptValue funcWithoutData(QScriptContext *context, QScriptEngine *engine);
 QScriptValue Foo(QScriptContext *context, QScriptEngine *engine);
+QScriptValue constructBar(QScriptContext *context, QScriptEngine *engine);
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -38,7 +49,7 @@ MainWindow::MainWindow(QWidget *parent)
 
 
     codeEditor = new JSCodeEditor();
-    codeEditor->setCodeFoldingEnabled(true); // 代码折叠功能还有大问题，先禁用
+    codeEditor->setCodeFoldingEnabled(true); // 代码折叠功能
     codeEditor->setExecutionArrowEnabled(true); // 显示当箭头
     codeEditor->setReadOnly(false); // 允许实时编辑脚本内容
     QHBoxLayout *codeEditorLayout = new QHBoxLayout();
@@ -135,13 +146,7 @@ void MainWindow::on_pushButton_start_clicked()
             }
             engineAgent.setDebugMode(MyScriptEngineAgent::Continue);
 
-            // // 测试QObject
-            // // 存在重大问题，暂时不要使用此功能
-            // MyQObject qObj;
-            // qObj.setObjectName("this is qObj");
-            // qDebug() << "obj name:" << qObj.objectName();
-            // auto jsQObj = engine.newQObject(&qObj);
-            // engine.globalObject().setProperty("qObj", jsQObj);
+
 
             // console
             QScriptValue console = engine.newObject();
@@ -156,19 +161,30 @@ void MainWindow::on_pushButton_start_clicked()
             fooProto.setProperty("whatever", engine.newVariant(QString("protoVal")));
             engine.globalObject().setProperty("Foo", engine.newFunction(Foo, fooProto));
 
-            // 测试脚本：new 调用与普通调用
-            engine.evaluate(
-R"(
-var a = new Foo();
-console.log('a.bar=', a.bar);
-var b = Foo();
-console.log('b.baz=', b.baz);
-)", JS_FILE_NAME);
+            // 测试自定义类型 Bar 的 defaultPrototype 与构造器（使用 QObject 原型）
+            BarPrototype *barPrototypeObject = new BarPrototype();
+            QScriptValue barProto = engine.newQObject(barPrototypeObject);
+            engine.setDefaultPrototype(qMetaTypeId<Bar>(), barProto);
+            QScriptValue barCtor = engine.newFunction(constructBar, barProto);
+            // set constructor.prototype to the prototype object
+            barCtor.setProperty("prototype", barProto);
+            engine.globalObject().setProperty("Bar", barCtor);
 
-            // // 测试 callPure FunctionSignature 接口
-            // engine.globalObject().setProperty("callPure", engine.newFunction(funcWithoutData));
-            // // 直接调用以验证功能
-            // engine.evaluate("console.log('callPure->', callPure(666));", JS_FILE_NAME);
+            // funcWithoutData
+            engine.globalObject().setProperty("callPure", engine.newFunction(funcWithoutData));
+
+
+            // 测试QObject
+            QObject qObj;
+            qObj.setObjectName("this is qObj");
+            qDebug() << "obj name:" << qObj.objectName();
+            QObject::connect(&qObj, &QObject::destroyed, [](QObject* obj) {
+                qDebug() << "对象已被销毁! 指针地址:" << obj;
+                qDebug() << "对象名:" << (obj ? obj->objectName() : "nullptr");
+            });
+            auto jsQObj = engine.newQObject(&qObj);
+            engine.globalObject().setProperty("qObj", jsQObj);
+
 
             QString scriptStr = codeEditor->toPlainText();
 
@@ -226,6 +242,41 @@ QScriptValue funcWithoutData(QScriptContext *context, QScriptEngine *engine)
     qDebug() << "argumentCount " << context->argumentCount();
     qDebug() << "argument 0 is " << context->argument(0).toInt32();
     return QScriptValue(QString("hello from funcWithoutData"));
+}
+
+QScriptValue constructBar(QScriptContext *context, QScriptEngine *engine)
+{
+    if (!context || !engine)
+        return QScriptValue();
+    // create C++ Bar value (could initialize from context arguments)
+    Bar bar;
+    if (context->argumentCount() > 0) {
+        bar.name = context->argument(0).toString();
+    }
+    if (context->argumentCount() > 1) {
+        bar.name = context->argument(1).toInt32();
+    }
+
+    if (context->isCalledAsConstructor()) {
+        // initialize the new object (thisObject refers to the new instance)
+        context->thisObject().setProperty("fromCtor", engine->newVariant(QString("constructed")));
+        // attach any initial data if desired
+        context->thisObject().setProperty("name", engine->newVariant(bar.name));
+        context->thisObject().setProperty("value", engine->newVariant(bar.value));
+        return engine->undefinedValue();
+    } else {
+        // not called as constructor: create and return our own object
+        QScriptValue object = engine->newObject();
+        // set prototype using defaultPrototype if available
+        QScriptValue proto = engine->defaultPrototype(qMetaTypeId<Bar>());
+        if (proto.isValid()) {
+            JS_SetPrototype(engine->ctx(), object.rawValue(), proto.rawValue());
+        }
+        // expose data
+        object.setProperty("val", engine->newVariant(bar.value));
+        object.setProperty("name", engine->newVariant(bar.name));
+        return object;
+    }
 }
 
 QScriptValue Foo(QScriptContext *context, QScriptEngine *engine)
@@ -320,6 +371,37 @@ QString MainWindow::debugCode()
 {
     return
 R"(
+// ==================== QObject测试 ====================
+console.log("\n===== QObject测试 =====");
+console.log("传入外部QObject");
+console.log("对象名:", qObj.objectName);
+qObj.newProp = "new prop";
+console.log("访问属性:", qObj.newProp);
+qObj.fun = () => {
+    return "new function";
+};
+console.log("调用方法:", qObj.fun());
+qObj.deleteLater();
+console.log("deleteLater()已调用");
+// ==================== 无参函数签名测试 ====================
+console.log("\n===== 无参函数签名测试 =====");
+console.log('callPure->', callPure(666));
+// ==================== 构造函数测试 ====================
+console.log("\n===== 构造函数测试 =====");
+var a = new Foo();
+console.log('a.bar=', a.bar);
+var b = Foo();
+console.log('b.baz=', b.baz);
+// ==================== prototype注册测试 ====================
+console.log("\n===== prototype注册测试 =====");
+var c = new Bar();
+console.log('c.fromCtor=', c.fromCtor);
+console.log(typeof c.greet === 'function'); // true
+console.log('c.greet=', typeof c.greet === 'function' ? c.greet() : c.greet);
+var d = Bar();
+console.log('d.val=', d.val);
+console.log(typeof Bar.prototype.greet === 'function'); // true
+console.log('Bar.prototype.greet=', typeof Bar.prototype.greet === 'function' ? Bar.prototype.greet() : Bar.prototype.greet);
 // ==================== 变量测试 ====================
 // 基本变量声明和赋值
 var intVar = 42;
@@ -329,7 +411,7 @@ var boolVar = true;
 var nullVar = null;
 var undefinedVar;
 
-console.log("===== 变量测试 =====");
+console.log("\n===== 变量测试 =====");
 console.log("整数:", intVar);
 console.log("浮点数:", floatVar);
 console.log("字符串:", strVar);

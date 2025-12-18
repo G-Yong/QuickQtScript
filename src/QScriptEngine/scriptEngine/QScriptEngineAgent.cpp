@@ -92,6 +92,7 @@ QScriptEngineAgent::QScriptEngineAgent(QScriptEngine *engine)
 
 QScriptEngineAgent::~QScriptEngineAgent()
 {
+
 }
 
 void QScriptEngineAgent::contextPop()

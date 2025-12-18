@@ -22,6 +22,7 @@ HEADERS += \
     codeEditor/jscodeeditor.h \
     mainwindow.h \
     myqobject.h \
+    barprototype.h \
     myscriptengineagent.h
 
 FORMS += \
