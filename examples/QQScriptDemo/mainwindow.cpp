@@ -49,9 +49,9 @@ MainWindow::MainWindow(QWidget *parent)
 
 
     codeEditor = new JSCodeEditor();
-    codeEditor->setCodeFoldingEnabled(true); // 代码折叠功能
+    codeEditor->setCodeFoldingEnabled(true);    // 代码折叠功能
     codeEditor->setExecutionArrowEnabled(true); // 显示箭头
-    codeEditor->setReadOnly(false); // 允许实时编辑脚本内容
+    codeEditor->setReadOnly(false);             // 允许实时编辑脚本内容
     QHBoxLayout *codeEditorLayout = new QHBoxLayout();
     codeEditorLayout->setMargin(0);
     codeEditorLayout->addWidget(codeEditor);
@@ -127,6 +127,7 @@ void MainWindow::on_pushButton_start_clicked()
         ui->pushButton_continue->setVisible(true);
         ui->plainTextEdit->clear();
         codeEditor->clearExecutionArrow();
+        codeEditor->clearAnnotations();
 
         // 启动
         auto functor = [&](){
@@ -188,7 +189,8 @@ void MainWindow::on_pushButton_start_clicked()
             engine.globalObject().setProperty("qObj", jsQObj);
 
 
-            QString scriptStr = codeEditor->toPlainText();
+            // QString scriptStr = codeEditor->toPlainText(); // 这样取得的是包含了annotation的全部文本
+            QString scriptStr = codeEditor->getSourceCode(); // 这样只取得源码
 
             // auto chkRet = engine.checkSyntax(scriptStr);
             // qDebug() << "result:"

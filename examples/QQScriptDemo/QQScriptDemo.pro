@@ -13,6 +13,9 @@ CONFIG += c++17
 
 SOURCES += \
     codeEditor/jscodeeditor.cpp \
+    codeEditor/jssyntaxhighlighter.cpp \
+    codeEditor/linenumberarea.cpp \
+    codeEditor/codefoldingarea.cpp \
     main.cpp \
     mainwindow.cpp \
     myqobject.cpp \
@@ -20,6 +23,9 @@ SOURCES += \
 
 HEADERS += \
     codeEditor/jscodeeditor.h \
+    codeEditor/jssyntaxhighlighter.h \
+    codeEditor/linenumberarea.h \
+    codeEditor/codefoldingarea.h \
     mainwindow.h \
     myqobject.h \
     barprototype.h \
