@@ -102,6 +102,15 @@ JSSyntaxHighlighter::JSSyntaxHighlighter(QTextDocument *parent)
 
 void JSSyntaxHighlighter::highlightBlock(const QString &text)
 {
+    AnnotationUserData *data = dynamic_cast<AnnotationUserData *>(currentBlock().userData());
+    if (data && data->isAnnotation()) {
+        QTextCharFormat fmt;
+        fmt.setForeground(QColor(200, 200, 200));
+        fmt.setFontItalic(true);
+        setFormat(0, text.length(), fmt);
+        return;
+    }
+
     // 应用所有高亮规则
     foreach (const HighlightingRule &rule, highlightingRules) {
         QRegularExpressionMatchIterator matchIterator = rule.pattern.globalMatch(text);
@@ -327,47 +336,67 @@ void JSCodeEditor::lineNumberAreaPaintEvent(QPaintEvent *event)
     int top = qRound(blockBoundingGeometry(block).translated(contentOffset()).top());
     int bottom = top + qRound(blockBoundingRect(block).height());
 
+    // Calculate logical line number for the first visible block
+    int logicalLineNumber = 1;
+    QTextBlock b = document()->firstBlock();
+    while (b.isValid() && b != block) {
+        AnnotationUserData *data = dynamic_cast<AnnotationUserData *>(b.userData());
+        if (!data || !data->isAnnotation()) {
+            logicalLineNumber++;
+        }
+        b = b.next();
+    }
+
     // 设置行号字体颜色
     painter.setPen(QColor(128, 128, 128));
     painter.setFont(font());
 
     while (block.isValid() && top <= event->rect().bottom()) {
+        AnnotationUserData *data = dynamic_cast<AnnotationUserData *>(block.userData());
+        bool isAnnotation = (data && data->isAnnotation());
+
         if (block.isVisible() && bottom >= event->rect().top()) {
-            QString number = QString::number(blockNumber + 1);
-            int lineNum = blockNumber + 1;
-            
-            // 绘制执行箭头（优先级最高，在最左侧）
-            if (executionArrowEnabled && currentExecutionLine == lineNum) {
-                painter.save();
-                painter.setBrush(QColor(255, 255, 0)); // 黄色箭头
-                painter.setPen(QColor(255, 255, 0));
+            if (!isAnnotation) {
+                QString number = QString::number(logicalLineNumber);
+                int lineNum = logicalLineNumber;
                 
-                // 绘制右向箭头
-                QPolygon arrow;
-                int arrowY = top + fontMetrics().height() / 2;
-                arrow << QPoint(2, arrowY - 5)
-                      << QPoint(12, arrowY)
-                      << QPoint(2, arrowY + 5);
-                painter.drawPolygon(arrow);
-                painter.restore();
+                // 绘制执行箭头（优先级最高，在最左侧）
+                if (executionArrowEnabled && currentExecutionLine == lineNum) {
+                    painter.save();
+                    painter.setBrush(QColor(255, 255, 0)); // 黄色箭头
+                    painter.setPen(QColor(255, 255, 0));
+                    
+                    // 绘制右向箭头
+                    QPolygon arrow;
+                    int arrowY = top + fontMetrics().height() / 2;
+                    arrow << QPoint(2, arrowY - 5)
+                          << QPoint(12, arrowY)
+                          << QPoint(2, arrowY + 5);
+                    painter.drawPolygon(arrow);
+                    painter.restore();
+                    
+                    // 高亮当前执行行背景
+                    painter.fillRect(QRect(0, top, lineNumberArea->width(), 
+                                         fontMetrics().height()), QColor(255, 255, 0, 50));
+                }
                 
-                // 高亮当前执行行背景
-                painter.fillRect(QRect(0, top, lineNumberArea->width(), 
-                                     fontMetrics().height()), QColor(255, 255, 0, 50));
+                // 绘制断点
+                if (hasBreakpoint(lineNum)) {
+                    painter.fillRect(QRect(0, top, lineNumberArea->width() - 5, 
+                                         fontMetrics().height()), QColor(255, 0, 0, 100));
+                    painter.setBrush(QColor(255, 0, 0));
+                    painter.drawEllipse(QRect(lineNumberArea->width() - 15, top + 2, 10, 10));
+                }
+                
+                // 绘制行号
+                painter.setPen(QColor(128, 128, 128));
+                painter.drawText(0, top, lineNumberArea->width() - 20, 
+                               fontMetrics().height(), Qt::AlignRight, number);
             }
-            
-            // 绘制断点
-            if (hasBreakpoint(lineNum)) {
-                painter.fillRect(QRect(0, top, lineNumberArea->width() - 5, 
-                                     fontMetrics().height()), QColor(255, 0, 0, 100));
-                painter.setBrush(QColor(255, 0, 0));
-                painter.drawEllipse(QRect(lineNumberArea->width() - 15, top + 2, 10, 10));
-            }
-            
-            // 绘制行号
-            painter.setPen(QColor(128, 128, 128));
-            painter.drawText(0, top, lineNumberArea->width() - 20, 
-                           fontMetrics().height(), Qt::AlignRight, number);
+        }
+
+        if (!isAnnotation) {
+            logicalLineNumber++;
         }
 
         block = block.next();
@@ -490,6 +519,21 @@ void JSCodeEditor::highlightCurrentLine()
         extraSelections.append(selection);
     }
 
+    // Add annotation selections
+    QTextBlock block = document()->firstBlock();
+    while (block.isValid()) {
+        AnnotationUserData *data = dynamic_cast<AnnotationUserData *>(block.userData());
+        if (data && data->isAnnotation()) {
+            QTextEdit::ExtraSelection selection;
+            selection.format.setBackground(QColor(60, 60, 60)); // Annotation background
+            selection.format.setProperty(QTextFormat::FullWidthSelection, true);
+            selection.cursor = QTextCursor(block);
+            selection.cursor.clearSelection();
+            extraSelections.append(selection);
+        }
+        block = block.next();
+    }
+
     setExtraSelections(extraSelections);
 }
 
@@ -562,8 +606,82 @@ void JSCodeEditor::contextMenuEvent(QContextMenuEvent *event)
     menu.exec(event->globalPos());
 }
 
+void JSCodeEditor::inputMethodEvent(QInputMethodEvent *event)
+{
+    AnnotationUserData *data = dynamic_cast<AnnotationUserData *>(textCursor().block().userData());
+    if (data && data->isAnnotation()) {
+        return;
+    }
+    QPlainTextEdit::inputMethodEvent(event);
+}
+
 void JSCodeEditor::keyPressEvent(QKeyEvent *event)
 {
+    // Annotation protection logic
+    auto isAnnotation = [](const QTextBlock &block) {
+        if (!block.isValid()) return false;
+        AnnotationUserData *data = dynamic_cast<AnnotationUserData *>(block.userData());
+        return data && data->isAnnotation();
+    };
+
+    QTextCursor cursor = textCursor();
+
+    // 1. Check if selection overlaps with any annotation block
+    if (cursor.hasSelection()) {
+        bool isNavigation = 
+            event->key() == Qt::Key_Up || event->key() == Qt::Key_Down ||
+            event->key() == Qt::Key_Left || event->key() == Qt::Key_Right ||
+            event->key() == Qt::Key_PageUp || event->key() == Qt::Key_PageDown ||
+            event->key() == Qt::Key_Home || event->key() == Qt::Key_End;
+
+        bool isEdit = !isNavigation && 
+                      (!event->text().isEmpty() && (event->modifiers() & Qt::ControlModifier) == 0); 
+        
+        if (event->key() == Qt::Key_Backspace || event->key() == Qt::Key_Delete || 
+            event->matches(QKeySequence::Cut) || event->matches(QKeySequence::Paste)) {
+            isEdit = true;
+        }
+        
+        if (isEdit) {
+            int start = cursor.selectionStart();
+            int end = cursor.selectionEnd();
+            QTextBlock b = document()->findBlock(start);
+            while (b.isValid() && b.position() < end) {
+                if (isAnnotation(b)) {
+                    return; // Prevent editing if selection contains annotation
+                }
+                b = b.next();
+            }
+        }
+    }
+
+    // 2. Check if cursor is inside an annotation block
+    if (isAnnotation(cursor.block())) {
+        bool isNavigation = 
+            event->key() == Qt::Key_Up || event->key() == Qt::Key_Down ||
+            event->key() == Qt::Key_Left || event->key() == Qt::Key_Right ||
+            event->key() == Qt::Key_PageUp || event->key() == Qt::Key_PageDown ||
+            event->key() == Qt::Key_Home || event->key() == Qt::Key_End;
+            
+        if (isNavigation || event->matches(QKeySequence::Copy)) {
+            QPlainTextEdit::keyPressEvent(event);
+            return;
+        }
+        return; // Block everything else
+    }
+
+    // 3. Check boundary conditions (Backspace/Delete merging blocks)
+    if (event->key() == Qt::Key_Backspace && cursor.atBlockStart() && !cursor.hasSelection()) {
+        if (isAnnotation(cursor.block().previous())) {
+            return;
+        }
+    }
+    if (event->key() == Qt::Key_Delete && cursor.atBlockEnd() && !cursor.hasSelection()) {
+        if (isAnnotation(cursor.block().next())) {
+            return;
+        }
+    }
+
     // 自动补全处理
     if (completer && completer->popup()->isVisible()) {
         switch (event->key()) {
@@ -972,3 +1090,114 @@ void CodeFoldingArea::mousePressEvent(QMouseEvent *event)
     }
     QWidget::mousePressEvent(event);
 }
+
+void JSCodeEditor::addAnnotation(int lineNumber, const QString &text)
+{
+    QTextBlock block = document()->firstBlock();
+    int logicalLine = 1;
+    while (block.isValid()) {
+        AnnotationUserData *data = dynamic_cast<AnnotationUserData *>(block.userData());
+        if (!data || !data->isAnnotation()) {
+            if (logicalLine == lineNumber) {
+                break;
+            }
+            logicalLine++;
+        }
+        block = block.next();
+    }
+    
+    if (!block.isValid()) return;
+    
+    QTextCursor cursor(block);
+    cursor.movePosition(QTextCursor::EndOfBlock);
+    cursor.insertBlock();
+    cursor.insertText(text);
+    
+    QTextBlock annotationBlock = cursor.block();
+    annotationBlock.setUserData(new AnnotationUserData(true));
+    
+    QTextCursor annotationCursor(annotationBlock);
+    annotationCursor.select(QTextCursor::BlockUnderCursor);
+    QTextCharFormat fmt;
+    fmt.setForeground(QColor(200, 200, 200)); 
+    fmt.setFontItalic(true);
+    annotationCursor.setCharFormat(fmt);
+    
+    highlightCurrentLine(); // Update extra selections
+}
+
+void JSCodeEditor::removeAnnotation(int lineNumber)
+{
+    QTextBlock block = document()->firstBlock();
+    int logicalLine = 1;
+    while (block.isValid()) {
+        AnnotationUserData *data = dynamic_cast<AnnotationUserData *>(block.userData());
+        if (!data || !data->isAnnotation()) {
+            if (logicalLine == lineNumber) {
+                break;
+            }
+            logicalLine++;
+        }
+        block = block.next();
+    }
+    
+    if (!block.isValid()) return;
+    
+    QTextBlock nextBlock = block.next();
+    while (nextBlock.isValid()) {
+        AnnotationUserData *data = dynamic_cast<AnnotationUserData *>(nextBlock.userData());
+        if (data && data->isAnnotation()) {
+            QTextCursor cursor(nextBlock);
+            cursor.select(QTextCursor::BlockUnderCursor);
+            cursor.removeSelectedText();
+            cursor.deletePreviousChar(); 
+            nextBlock = block.next(); 
+        } else {
+            break; 
+        }
+    }
+    highlightCurrentLine();
+}
+
+void JSCodeEditor::clearAnnotations()
+{
+    QTextBlock block = document()->firstBlock();
+    while (block.isValid()) {
+        AnnotationUserData *data = dynamic_cast<AnnotationUserData *>(block.userData());
+        if (data && data->isAnnotation()) {
+            QTextBlock next = block.next();
+            QTextCursor cursor(block);
+            cursor.select(QTextCursor::BlockUnderCursor);
+            cursor.removeSelectedText();
+            cursor.deletePreviousChar();
+            block = next;
+        } else {
+            block = block.next();
+        }
+    }
+    highlightCurrentLine();
+}
+
+void JSCodeEditor::paintEvent(QPaintEvent *e)
+{
+    QPlainTextEdit::paintEvent(e);
+
+    QPainter painter(viewport());
+    QTextBlock block = firstVisibleBlock();
+    QPointF offset = contentOffset();
+    
+    while (block.isValid()) {
+        AnnotationUserData *data = dynamic_cast<AnnotationUserData *>(block.userData());
+        if (data && data->isAnnotation()) {
+            QRectF r = blockBoundingGeometry(block).translated(offset);
+            if (r.bottom() >= e->rect().top() && r.top() <= e->rect().bottom()) {
+                painter.setPen(QColor(100, 100, 255)); // Blue border
+                painter.drawRect(r.adjusted(0, 0, -1, -1));
+            }
+        }
+        block = block.next();
+        if (blockBoundingGeometry(block).translated(offset).top() > e->rect().bottom())
+            break;
+    }
+}
+

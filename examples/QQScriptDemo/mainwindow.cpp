@@ -102,6 +102,8 @@ void MainWindow::handleLog(QString info)
 
     QMetaObject::invokeMethod(this, [=](){
         ui->plainTextEdit->appendPlainText(finalStr);
+
+        codeEditor->addAnnotation(posInfo.line, info);
     }, Qt::QueuedConnection);
 }
 

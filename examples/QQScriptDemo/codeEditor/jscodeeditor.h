@@ -31,6 +31,15 @@ QT_END_NAMESPACE
 class LineNumberArea;
 class CodeFoldingArea;
 
+class AnnotationUserData : public QTextBlockUserData
+{
+public:
+    AnnotationUserData(bool isAnnotation = false) : m_isAnnotation(isAnnotation) {}
+    bool isAnnotation() const { return m_isAnnotation; }
+private:
+    bool m_isAnnotation;
+};
+
 //==============================================================================
 //  JavaScript语法高亮器
 //==============================================================================
@@ -97,6 +106,11 @@ public:
     bool isCodeFoldingEnabled() const { return codeFoldingEnabled; }
     void clearAllFolds();  // 清除所有折叠
     
+    // 注释框相关
+    void addAnnotation(int lineNumber, const QString &text);
+    void removeAnnotation(int lineNumber);
+    void clearAnnotations();
+
     // 代码执行箭头控制
     void setExecutionArrowEnabled(bool enabled);
     bool isExecutionArrowEnabled() const { return executionArrowEnabled; }
@@ -120,9 +134,11 @@ signals:
     void contentEditedDebounced();
 
 protected:
+    void paintEvent(QPaintEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
     void contextMenuEvent(QContextMenuEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
+    void inputMethodEvent(QInputMethodEvent *event) override;
 
 private slots:
     void updateLineNumberAreaWidth(int newBlockCount);
