@@ -2,10 +2,8 @@
 #define JSCODEEDITOR_H
 
 #include <QPlainTextEdit>
-#include <QSyntaxHighlighter>
 #include <QTextDocument>
 #include <QRegularExpression>
-#include <QTextCharFormat>
 #include <QPainter>
 #include <QTextBlock>
 #include <QScrollBar>
@@ -15,6 +13,10 @@
 #include <QMenu>
 #include <QContextMenuEvent>
 #include <QSet>
+
+#include "jssyntaxhighlighter.h"
+#include "linenumberarea.h"
+#include "codefoldingarea.h"
 
 #ifdef Q_OS_WIN
 #pragma execution_character_set("utf-8")
@@ -27,49 +29,6 @@ class QSize;
 class QWidget;
 class QTimer;
 QT_END_NAMESPACE
-
-class LineNumberArea;
-class CodeFoldingArea;
-
-class AnnotationUserData : public QTextBlockUserData
-{
-public:
-    AnnotationUserData(bool isAnnotation = false) : m_isAnnotation(isAnnotation) {}
-    bool isAnnotation() const { return m_isAnnotation; }
-private:
-    bool m_isAnnotation;
-};
-
-//==============================================================================
-//  JavaScript语法高亮器
-//==============================================================================
-class JSSyntaxHighlighter : public QSyntaxHighlighter
-{
-    Q_OBJECT
-
-public:
-    explicit JSSyntaxHighlighter(QTextDocument *parent = nullptr);
-
-protected:
-    void highlightBlock(const QString &text) override;
-
-private:
-    struct HighlightingRule
-    {
-        QRegularExpression pattern;
-        QTextCharFormat format;
-    };
-    QVector<HighlightingRule> highlightingRules;
-
-    QTextCharFormat keywordFormat;
-    QTextCharFormat classFormat;
-    QTextCharFormat singleLineCommentFormat;
-    QTextCharFormat multiLineCommentFormat;
-    QTextCharFormat quotationFormat;
-    QTextCharFormat functionFormat;
-    QTextCharFormat numberFormat;
-    QTextCharFormat operatorFormat;
-};
 
 //==============================================================================
 //  代码编辑器主类
@@ -110,6 +69,9 @@ public:
     void addAnnotation(int lineNumber, const QString &text);
     void removeAnnotation(int lineNumber);
     void clearAnnotations();
+    
+    // 获取源代码（不包含annotation）
+    QString getSourceCode() const;
 
     // 代码执行箭头控制
     void setExecutionArrowEnabled(bool enabled);
@@ -127,15 +89,23 @@ public:
     QRectF getBlockBoundingGeometry(const QTextBlock &block) const { return blockBoundingGeometry(block); }
     QRectF getBlockBoundingRect(const QTextBlock &block) const { return blockBoundingRect(block); }
     QPointF getContentOffset() const { return contentOffset(); }
+    
+    // 根据y坐标获取逻辑行号（排除annotation blocks）
+    int getLogicalLineNumberAtY(int y) const;
 
 signals:
     void breakPointsChanged();
+
     // 防抖后的内容变更信号
     void contentEditedDebounced();
 
 protected:
     void paintEvent(QPaintEvent *event) override;
+
+    // 在此函数中，对代码行页面、折叠控件页面进行整理，将其嵌入到当前画面中
+    // 此页面的左侧已经通过 setViewportMargins的方式空了出来
     void resizeEvent(QResizeEvent *event) override;
+
     void contextMenuEvent(QContextMenuEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
     void inputMethodEvent(QInputMethodEvent *event) override;
@@ -152,7 +122,6 @@ private:
     void setupContextMenu();
     
     // 查找匹配的大括号
-    int findMatchingBrace(int position, bool forward = true);
     QTextBlock findBlockEnd(QTextBlock startBlock);
     QTextBlock findBlockStart(QTextBlock endBlock);
     // 根据绝对块号查找 QTextBlock（忽略可见性）
@@ -182,60 +151,6 @@ private:
     // 防抖和文本差异记录，用于在编辑后重映射断点和执行行
     QStringList prevTextLines;
     QTimer *editDebounceTimer{nullptr};
-
-    
-};
-
-//==============================================================================
-//  行号区域类
-//==============================================================================
-class LineNumberArea : public QWidget
-{
-public:
-    LineNumberArea(JSCodeEditor *editor) : QWidget(editor), codeEditor(editor)
-    {}
-
-    QSize sizeHint() const override
-    {
-        return QSize(codeEditor->lineNumberAreaWidth(), 0);
-    }
-
-protected:
-    void paintEvent(QPaintEvent *event) override
-    {
-        codeEditor->lineNumberAreaPaintEvent(event);
-    }
-
-    void mousePressEvent(QMouseEvent *event) override;
-
-private:
-    JSCodeEditor *codeEditor;
-};
-
-//==============================================================================
-//  代码折叠区域类
-//==============================================================================
-class CodeFoldingArea : public QWidget
-{
-public:
-    CodeFoldingArea(JSCodeEditor *editor) : QWidget(editor), codeEditor(editor)
-    {}
-
-    QSize sizeHint() const override
-    {
-        return QSize(codeEditor->codeFoldingAreaWidth(), 0);
-    }
-
-protected:
-    void paintEvent(QPaintEvent *event) override
-    {
-        codeEditor->codeFoldingAreaPaintEvent(event);
-    }
-
-    void mousePressEvent(QMouseEvent *event) override;
-
-private:
-    JSCodeEditor *codeEditor;
 };
 
 #endif // JSCODEEDITOR_H

@@ -14,138 +14,6 @@
 #include <QTimer>
 
 //==============================================================================
-//  JavaScript语法高亮器实现
-//==============================================================================
-JSSyntaxHighlighter::JSSyntaxHighlighter(QTextDocument *parent)
-    : QSyntaxHighlighter(parent)
-{
-    qRegisterMetaType<QTextBlock>("QTextBlock");
-    qRegisterMetaType<QTextCursor>("QTextCursor");
-
-    HighlightingRule rule;
-
-    // JavaScript关键字格式
-    keywordFormat.setForeground(QColor(86, 156, 214)); // VS Code蓝色
-    keywordFormat.setFontWeight(QFont::Bold);
-    QStringList keywordPatterns;
-    keywordPatterns << "\\bvar\\b" << "\\blet\\b" << "\\bconst\\b"
-                    << "\\bfunction\\b" << "\\breturn\\b" << "\\bif\\b"
-                    << "\\belse\\b" << "\\bfor\\b" << "\\bwhile\\b"
-                    << "\\bdo\\b" << "\\bswitch\\b" << "\\bcase\\b"
-                    << "\\bbreak\\b" << "\\bcontinue\\b" << "\\btry\\b"
-                    << "\\bcatch\\b" << "\\bfinally\\b" << "\\bthrow\\b"
-                    << "\\bnew\\b" << "\\bthis\\b" << "\\btrue\\b"
-                    << "\\bfalse\\b" << "\\bnull\\b" << "\\bundefined\\b"
-                    << "\\btypeof\\b" << "\\binstanceof\\b" << "\\bin\\b"
-                    << "\\bof\\b" << "\\bclass\\b" << "\\bextends\\b"
-                    << "\\bsuper\\b" << "\\bstatic\\b" << "\\basync\\b"
-                    << "\\bawait\\b" << "\\byield\\b" << "\\bimport\\b"
-                    << "\\bexport\\b" << "\\bfrom\\b" << "\\bdefault\\b";
-
-    foreach (const QString &pattern, keywordPatterns) {
-        rule.pattern = QRegularExpression(pattern);
-        rule.format = keywordFormat;
-        highlightingRules.append(rule);
-    }
-
-    // 类名格式
-    classFormat.setForeground(QColor(78, 201, 176)); // 青色
-    classFormat.setFontWeight(QFont::Bold);
-    rule.pattern = QRegularExpression("\\b[A-Z][a-zA-Z_0-9]*\\b");
-    rule.format = classFormat;
-    highlightingRules.append(rule);
-
-    // 函数名格式
-    functionFormat.setForeground(QColor(220, 220, 170)); // 淡黄色
-    rule.pattern = QRegularExpression("\\b[a-zA-Z_][a-zA-Z_0-9]*(?=\\s*\\()");
-    rule.format = functionFormat;
-    highlightingRules.append(rule);
-
-    // 数字格式
-    numberFormat.setForeground(QColor(181, 206, 168)); // 淡绿色
-    rule.pattern = QRegularExpression("\\b\\d+(\\.\\d+)?\\b");
-    rule.format = numberFormat;
-    highlightingRules.append(rule);
-
-    // 运算符格式
-    operatorFormat.setForeground(QColor(212, 212, 212)); // 浅灰色
-    QStringList operatorPatterns;
-    operatorPatterns << "\\+" << "\\-" << "\\*" << "/" << "%" << "="
-                     << "==" << "===" << "!=" << "!==" << "<" << ">"
-                     << "<=" << ">=" << "&&" << "\\|\\|" << "!" << "&"
-                     << "\\|" << "\\^" << "~" << "<<" << ">>" << "\\+\\+"
-                     << "\\-\\-" << "\\+=" << "\\-=" << "\\*=" << "/=" << "%=";
-    
-    foreach (const QString &pattern, operatorPatterns) {
-        rule.pattern = QRegularExpression(pattern);
-        rule.format = operatorFormat;
-        highlightingRules.append(rule);
-    }
-
-    // 字符串格式
-    quotationFormat.setForeground(QColor(206, 145, 120)); // 橙色
-    rule.pattern = QRegularExpression("\".*?\"|'.*?'|`.*?`");
-    rule.format = quotationFormat;
-    highlightingRules.append(rule);
-
-    // 单行注释格式
-    singleLineCommentFormat.setForeground(QColor(106, 153, 85)); // 绿色
-    singleLineCommentFormat.setFontItalic(true);
-    rule.pattern = QRegularExpression("//[^\n]*");
-    rule.format = singleLineCommentFormat;
-    highlightingRules.append(rule);
-
-    // 多行注释格式
-    multiLineCommentFormat.setForeground(QColor(106, 153, 85)); // 绿色
-    multiLineCommentFormat.setFontItalic(true);
-}
-
-void JSSyntaxHighlighter::highlightBlock(const QString &text)
-{
-    AnnotationUserData *data = dynamic_cast<AnnotationUserData *>(currentBlock().userData());
-    if (data && data->isAnnotation()) {
-        QTextCharFormat fmt;
-        fmt.setForeground(QColor(200, 200, 200));
-        fmt.setFontItalic(true);
-        setFormat(0, text.length(), fmt);
-        return;
-    }
-
-    // 应用所有高亮规则
-    foreach (const HighlightingRule &rule, highlightingRules) {
-        QRegularExpressionMatchIterator matchIterator = rule.pattern.globalMatch(text);
-        while (matchIterator.hasNext()) {
-            QRegularExpressionMatch match = matchIterator.next();
-            setFormat(match.capturedStart(), match.capturedLength(), rule.format);
-        }
-    }
-
-    // 处理多行注释
-    setCurrentBlockState(0);
-
-    QRegularExpression startExpression("/\\*");
-    QRegularExpression endExpression("\\*/");
-
-    int startIndex = 0;
-    if (previousBlockState() != 1)
-        startIndex = text.indexOf(startExpression);
-
-    while (startIndex >= 0) {
-        QRegularExpressionMatch match = endExpression.match(text, startIndex);
-        int endIndex = match.capturedStart();
-        int commentLength = 0;
-        if (endIndex == -1) {
-            setCurrentBlockState(1);
-            commentLength = text.length() - startIndex;
-        } else {
-            commentLength = endIndex - startIndex + match.capturedLength();
-        }
-        setFormat(startIndex, commentLength, multiLineCommentFormat);
-        startIndex = text.indexOf(startExpression, startIndex + commentLength);
-    }
-}
-
-//==============================================================================
 //  代码编辑器主类实现
 //==============================================================================
 JSCodeEditor::JSCodeEditor(QWidget *parent)
@@ -550,50 +418,17 @@ void JSCodeEditor::contextMenuEvent(QContextMenuEvent *event)
     menu.addAction("粘贴", this, &QPlainTextEdit::paste);
     menu.addSeparator();
     
-    // 断点操作 - 改进行号获取方式
-    int lineNumber = -1;
-    
-    // 方法1：优先使用当前光标位置
-    if (textCursor().hasSelection() || textCursor().position() >= 0) {
-        lineNumber = textCursor().blockNumber() + 1;
-    }
-    
-    // 方法2：如果没有有效的光标位置，则使用鼠标位置计算
-    if (lineNumber <= 0) {
-        QTextCursor cursor = cursorForPosition(event->pos());
-        if (!cursor.isNull() && cursor.position() >= 0) {
-            lineNumber = cursor.blockNumber() + 1;
-        }
-    }
-    
-    // 方法3：如果还是无效，使用更精确的位置计算
-    if (lineNumber <= 0) {
-        QPoint localPos = event->pos();
-        QTextBlock block = getFirstVisibleBlock();
-        int top = qRound(getBlockBoundingGeometry(block).translated(getContentOffset()).top());
-        int bottom = top + qRound(getBlockBoundingRect(block).height());
-        int blockNumber = block.blockNumber();
-        
-        while (block.isValid()) {
-            if (top <= localPos.y() && localPos.y() < bottom && block.isVisible()) {
-                lineNumber = blockNumber + 1;
-                break;
-            }
-            block = block.next();
-            top = bottom;
-            bottom = top + qRound(getBlockBoundingRect(block).height());
-            ++blockNumber;
-        }
-    }
+    // 使用逻辑行号（排除 annotation blocks）
+    int lineNumber = getLogicalLineNumberAtY(event->pos().y());
     
     // 如果获取到了有效的行号，添加断点菜单
     if (lineNumber > 0) {
         if (hasBreakpoint(lineNumber)) {
-            menu.addAction(QString("删除第%1行的断点").arg(lineNumber), [this, lineNumber]() {
+            menu.addAction(QString("移除第%1行的断点").arg(lineNumber), [this, lineNumber]() {
                 toggleBreakpoint(lineNumber);
             });
         } else {
-            menu.addAction(QString("在第%1行插入断点").arg(lineNumber), [this, lineNumber]() {
+            menu.addAction(QString("插入断点至第%1行").arg(lineNumber), [this, lineNumber]() {
                 toggleBreakpoint(lineNumber);
             });
         }
@@ -1042,55 +877,65 @@ QString JSCodeEditor::textUnderCursor() const
     return tc.selectedText();
 }
 
-//==============================================================================
-//  行号区域鼠标事件处理
-//==============================================================================
-void LineNumberArea::mousePressEvent(QMouseEvent *event)
+// 根据y坐标获取逻辑行号（排除annotation blocks）
+int JSCodeEditor::getLogicalLineNumberAtY(int y) const
 {
-    if (event->button() == Qt::LeftButton) {
-        QTextCursor cursor = codeEditor->cursorForPosition(
-            QPoint(0, event->pos().y()));
-        int lineNumber = cursor.blockNumber() + 1;
-        codeEditor->toggleBreakpoint(lineNumber);
-    }
-    QWidget::mousePressEvent(event);
-}
-
-//==============================================================================
-//  代码折叠区域鼠标事件处理
-//==============================================================================
-void CodeFoldingArea::mousePressEvent(QMouseEvent *event)
-{
-    if (event->button() == Qt::LeftButton) {
-        // 更准确的计算行号
-        int y = event->pos().y();
-        QTextBlock block = codeEditor->getFirstVisibleBlock();
-        int top = qRound(codeEditor->getBlockBoundingGeometry(block).translated(codeEditor->getContentOffset()).top());
-        int bottom = top + qRound(codeEditor->getBlockBoundingRect(block).height());
-        int blockNumber = block.blockNumber();
-        
-        // 找到被点击的行
-        while (block.isValid()) {
-            if (top <= y && y < bottom && block.isVisible()) {
-                int lineNumber = blockNumber + 1;
-                QString text = block.text().trimmed();
-                
-                // 检查是否是可折叠的代码块开始
-                if (codeEditor->isBlockStart(text)) {
-                    codeEditor->toggleFold(lineNumber);
-                }
-                break;
-            }
-            
-            block = block.next();
-            top = bottom;
-            bottom = top + qRound(codeEditor->getBlockBoundingRect(block).height());
-            ++blockNumber;
+    QTextBlock block = firstVisibleBlock();
+    int top = qRound(blockBoundingGeometry(block).translated(contentOffset()).top());
+    int bottom = top + qRound(blockBoundingRect(block).height());
+    
+    // 计算第一个可见块的逻辑行号
+    int logicalLineNumber = 1;
+    QTextBlock b = document()->firstBlock();
+    while (b.isValid() && b != block) {
+        AnnotationUserData *data = dynamic_cast<AnnotationUserData *>(b.userData());
+        if (!data || !data->isAnnotation()) {
+            logicalLineNumber++;
         }
+        b = b.next();
     }
-    QWidget::mousePressEvent(event);
+    
+    // 遍历找到 y 坐标对应的块
+    while (block.isValid()) {
+        if (block.isVisible() && top <= y && y < bottom) {
+            // 找到了对应的块
+            AnnotationUserData *data = dynamic_cast<AnnotationUserData *>(block.userData());
+            if (data && data->isAnnotation()) {
+                // 点击在 annotation 上，返回 -1 表示无效
+                return -1;
+            }
+            return logicalLineNumber;
+        }
+        
+        AnnotationUserData *data = dynamic_cast<AnnotationUserData *>(block.userData());
+        if (!data || !data->isAnnotation()) {
+            logicalLineNumber++;
+        }
+        
+        block = block.next();
+        top = bottom;
+        bottom = top + qRound(blockBoundingRect(block).height());
+    }
+    
+    return -1; // 未找到有效行
 }
 
+// 获取源代码（不包含annotation）
+QString JSCodeEditor::getSourceCode() const
+{
+    QStringList lines;
+    QTextBlock block = document()->firstBlock();
+    while (block.isValid()) {
+        AnnotationUserData *data = dynamic_cast<AnnotationUserData *>(block.userData());
+        if (!data || !data->isAnnotation()) {
+            lines.append(block.text());
+        }
+        block = block.next();
+    }
+    return lines.join('\n');
+}
+
+// 注释框相关方法
 void JSCodeEditor::addAnnotation(int lineNumber, const QString &text)
 {
     QTextBlock block = document()->firstBlock();
@@ -1108,20 +953,29 @@ void JSCodeEditor::addAnnotation(int lineNumber, const QString &text)
     
     if (!block.isValid()) return;
     
+    // 将文本按换行符分割，每一行创建一个单独的 annotation block
+    QStringList lines = text.split('\n');
+    
     QTextCursor cursor(block);
     cursor.movePosition(QTextCursor::EndOfBlock);
-    cursor.insertBlock();
-    cursor.insertText(text);
     
-    QTextBlock annotationBlock = cursor.block();
-    annotationBlock.setUserData(new AnnotationUserData(true));
-    
-    QTextCursor annotationCursor(annotationBlock);
-    annotationCursor.select(QTextCursor::BlockUnderCursor);
+    // 设置 annotation 的格式
     QTextCharFormat fmt;
     fmt.setForeground(QColor(200, 200, 200)); 
     fmt.setFontItalic(true);
-    annotationCursor.setCharFormat(fmt);
+    
+    for (const QString &line : lines) {
+        cursor.insertBlock();
+        cursor.insertText(line);
+        
+        QTextBlock annotationBlock = cursor.block();
+        annotationBlock.setUserData(new AnnotationUserData(true));
+        
+        // 应用格式到整个 block
+        QTextCursor annotationCursor(annotationBlock);
+        annotationCursor.select(QTextCursor::BlockUnderCursor);
+        annotationCursor.setCharFormat(fmt);
+    }
     
     highlightCurrentLine(); // Update extra selections
 }
@@ -1143,38 +997,60 @@ void JSCodeEditor::removeAnnotation(int lineNumber)
     
     if (!block.isValid()) return;
     
+    // 收集该行之后连续的 annotation blocks
+    QList<QTextBlock> annotationBlocks;
     QTextBlock nextBlock = block.next();
     while (nextBlock.isValid()) {
         AnnotationUserData *data = dynamic_cast<AnnotationUserData *>(nextBlock.userData());
         if (data && data->isAnnotation()) {
-            QTextCursor cursor(nextBlock);
-            cursor.select(QTextCursor::BlockUnderCursor);
-            cursor.removeSelectedText();
-            cursor.deletePreviousChar(); 
-            nextBlock = block.next(); 
+            annotationBlocks.append(nextBlock);
+            nextBlock = nextBlock.next();
         } else {
-            break; 
+            break;
         }
     }
+    
+    // 从后往前删除
+    for (int i = annotationBlocks.size() - 1; i >= 0; --i) {
+        QTextBlock annotationBlock = annotationBlocks[i];
+        if (annotationBlock.isValid()) {
+            QTextCursor cursor(annotationBlock);
+            cursor.movePosition(QTextCursor::StartOfBlock);
+            cursor.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
+            cursor.removeSelectedText();
+            cursor.deletePreviousChar();
+        }
+    }
+    
     highlightCurrentLine();
 }
 
 void JSCodeEditor::clearAnnotations()
 {
+    // 从后往前删除，避免索引错乱
+    QList<QTextBlock> annotationBlocks;
     QTextBlock block = document()->firstBlock();
     while (block.isValid()) {
         AnnotationUserData *data = dynamic_cast<AnnotationUserData *>(block.userData());
         if (data && data->isAnnotation()) {
-            QTextBlock next = block.next();
-            QTextCursor cursor(block);
-            cursor.select(QTextCursor::BlockUnderCursor);
+            annotationBlocks.append(block);
+        }
+        block = block.next();
+    }
+    
+    // 从后往前删除
+    for (int i = annotationBlocks.size() - 1; i >= 0; --i) {
+        QTextBlock annotationBlock = annotationBlocks[i];
+        if (annotationBlock.isValid()) {
+            QTextCursor cursor(annotationBlock);
+            cursor.movePosition(QTextCursor::StartOfBlock);
+            cursor.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
             cursor.removeSelectedText();
+            // 删除这个块本身（删除前面的换行符）
             cursor.deletePreviousChar();
-            block = next;
-        } else {
-            block = block.next();
         }
     }
+    
     highlightCurrentLine();
 }
 
@@ -1186,18 +1062,39 @@ void JSCodeEditor::paintEvent(QPaintEvent *e)
     QTextBlock block = firstVisibleBlock();
     QPointF offset = contentOffset();
     
+    // 收集连续的 annotation blocks 并合并绘制
     while (block.isValid()) {
         AnnotationUserData *data = dynamic_cast<AnnotationUserData *>(block.userData());
         if (data && data->isAnnotation()) {
-            QRectF r = blockBoundingGeometry(block).translated(offset);
-            if (r.bottom() >= e->rect().top() && r.top() <= e->rect().bottom()) {
-                painter.setPen(QColor(100, 100, 255)); // Blue border
-                painter.drawRect(r.adjusted(0, 0, -1, -1));
+            // 找到一组连续的 annotation blocks
+            QRectF mergedRect = blockBoundingGeometry(block).translated(offset);
+            QTextBlock nextBlock = block.next();
+            
+            while (nextBlock.isValid()) {
+                AnnotationUserData *nextData = dynamic_cast<AnnotationUserData *>(nextBlock.userData());
+                if (nextData && nextData->isAnnotation()) {
+                    // 合并矩形
+                    QRectF nextRect = blockBoundingGeometry(nextBlock).translated(offset);
+                    mergedRect = mergedRect.united(nextRect);
+                    nextBlock = nextBlock.next();
+                } else {
+                    break;
+                }
             }
+            
+            // 绘制合并后的矩形框
+            if (mergedRect.bottom() >= e->rect().top() && mergedRect.top() <= e->rect().bottom()) {
+                painter.setPen(QColor(100, 100, 255)); // Blue border
+                painter.drawRect(mergedRect.adjusted(0, 0, -1, -1));
+            }
+            
+            // 跳到下一个非 annotation block
+            block = nextBlock;
+        } else {
+            block = block.next();
         }
-        block = block.next();
-        if (blockBoundingGeometry(block).translated(offset).top() > e->rect().bottom())
+        
+        if (block.isValid() && blockBoundingGeometry(block).translated(offset).top() > e->rect().bottom())
             break;
     }
 }
-
