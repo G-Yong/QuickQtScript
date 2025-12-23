@@ -414,8 +414,65 @@ QString QScriptValue::toString() const
 
     if(JS_IsException(m_value) == false)
     {
+        if (JS_IsObject(m_value) && !JS_IsFunction(m_ctx, m_value) && !JS_IsArray(m_value))
+        {
+            // 处理对象，输出格式为 { prop1: value1, prop2: value2 }
+            res = "{ ";
+            
+            JSPropertyEnum *props = nullptr;
+            uint32_t plen = 0;
+            int ret = JS_GetOwnPropertyNames(m_ctx, &props, &plen, m_value, JS_GPN_STRING_MASK | JS_GPN_ENUM_ONLY);
+            if (ret >= 0 && props) {
+                for (uint32_t i = 0; i < plen; ++i) {
+                    if (i > 0) {
+                        res += ", ";
+                    }
+                    
+                    JSAtom atom = props[i].atom;
+                    const char *name = JS_AtomToCString(m_ctx, atom);
+                    QString key = name ? QString::fromUtf8(name) : QString();
+                    JS_FreeCString(m_ctx, name);
+                    
+                    res += key + ": ";
+                    
+                    JSValue propValue = JS_GetProperty(m_ctx, m_value, atom);
+                    QScriptValue scriptPropValue(m_ctx, propValue, m_engine);
+                    QString propStr = scriptPropValue.toString();
+                    
+                    // 如果属性值是字符串，需要添加引号
+                    if (JS_IsString(propValue)) {
+                        propStr = "\"" + propStr + "\"";
+                    } else if (JS_IsUndefined(propValue)) {
+                        propStr = "undefined";
+                    }
+                    
+                    res += propStr;
+                    JS_FreeValue(m_ctx, propValue);
+                }
+                JS_FreePropertyEnum(m_ctx, props, plen);
+            }
+            
+            res += " }";
+            return res;
+        }
+        else if (JS_IsSymbol(m_value))
+        {
+            // 处理 Symbol 类型
+            JSValue description = JS_GetPropertyStr(m_ctx, m_value, "description");
+            if (!JS_IsUndefined(description)) {
+                const char *desc = JS_ToCString(m_ctx, description);
+                QString symbolDesc = QString::fromUtf8(desc ? desc : "");
+                JS_FreeCString(m_ctx, desc);
+                JS_FreeValue(m_ctx, description);
+                return "Symbol(" + symbolDesc + ")";
+            } else {
+                JS_FreeValue(m_ctx, description);
+                return "Symbol()";
+            }
+        }
         JSValue s = JS_ToString(m_ctx, m_value);
-        if (JS_IsException(s))  // 有可能调用toString()失败
+        //  有可能调用toString()失败;
+        if (JS_IsException(s))
         {
             JSValue exception = JS_GetException(m_ctx);
             JSValue ss = JS_ToString(m_ctx, exception);
@@ -459,7 +516,7 @@ QString QScriptValue::toString() const
         // 这里不需要将backtrace加进来
         if(0)
         {
-            // 1. 获取 “stack” 对应的原子（atom），这是高效查找属性的键
+            // 1. 获取 "stack" 对应的原子（atom），这是高效查找属性的键
             JSAtom atom_stack = JS_NewAtom(m_ctx, "stack");
 
             // 2. 从异常对象中获取 stack 属性的值
@@ -467,7 +524,7 @@ QString QScriptValue::toString() const
 
             // 3. 检查并转换堆栈信息为C字符串
             if (!JS_IsUndefined(stack_val)) {
-                const char* stack_str = JS_ToCString(m_ctx, stack_val);
+                const char *stack_str = JS_ToCString(m_ctx, stack_val);
                 if (stack_str) {
                     // 4. 打印错误和堆栈
                     fprintf(stderr, "Exception occurred:\n%s\n", stack_str);

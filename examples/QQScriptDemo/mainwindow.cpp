@@ -156,6 +156,9 @@ void MainWindow::on_pushButton_start_clicked()
             console.setProperty("log", engine.newFunction(funcLog, this));
             engine.globalObject().setProperty("console", console);
 
+            // print
+            engine.globalObject().setProperty("print", engine.newFunction(funcLog, this));
+
             // sleep
             engine.globalObject().setProperty("sleep", engine.newFunction(funcSleep, this));
 
@@ -350,6 +353,13 @@ QString MainWindow::debugCode()
 {
     return
 R"(
+// ==================== Symbol测试 ====================
+let s1 = Symbol('foo');
+let s2 = Symbol('bar');
+console.log(s1) // Symbol(foo)
+console.log(s2) // Symbol(bar)
+console.log(s1.toString()) // "Symbol(foo) "
+console.log(s2.toString()) // "Symbol(bar) "
 // ==================== QObject测试 ====================
 console.log("\n===== QObject测试 =====");
 console.log("传入外部QObject");
@@ -360,6 +370,7 @@ qObj.fun = () => {
     return "new function";
 };
 console.log("调用方法:", qObj.fun());
+console.log("打印对象:", qObj);
 qObj.deleteLater();
 console.log("deleteLater()已调用");
 // ==================== 无参函数签名测试 ====================
