@@ -935,6 +935,7 @@ QString JSCodeEditor::getSourceCode() const
     return lines.join('\n');
 }
 
+// 注释框相关方法
 void JSCodeEditor::addAnnotation(int lineNumber, const QString &text)
 {
     QTextBlock block = document()->firstBlock();
@@ -992,51 +993,6 @@ void JSCodeEditor::addAnnotation(int lineNumber, const QString &text)
 
     highlightCurrentLine(); // Update extra selections
 }
-
-// // 注释框相关方法
-// void JSCodeEditor::addAnnotation(int lineNumber, const QString &text)
-// {
-//     QTextBlock block = document()->firstBlock();
-//     int logicalLine = 1;
-//     while (block.isValid()) {
-//         AnnotationUserData *data = dynamic_cast<AnnotationUserData *>(block.userData());
-//         if (!data || !data->isAnnotation()) {
-//             if (logicalLine == lineNumber) {
-//                 break;
-//             }
-//             logicalLine++;
-//         }
-//         block = block.next();
-//     }
-//     // qDebug() << "lineNumber" << lineNumber << "logicalLine" << logicalLine;
-//     if (!block.isValid()) return;
-    
-//     // 将文本按换行符分割，每一行创建一个单独的 annotation block
-//     QStringList lines = text.split('\n');
-
-//     QTextCursor cursor(block);
-//     cursor.movePosition(QTextCursor::EndOfBlock);
-    
-//     // 设置 annotation 的格式
-//     QTextCharFormat fmt;
-//     fmt.setForeground(QColor(200, 200, 200));
-//     fmt.setFontItalic(true);
-    
-//     for (const QString &line : lines) {
-//         cursor.insertBlock();
-//         cursor.insertText(line);
-
-//         QTextBlock annotationBlock = cursor.block();
-//         annotationBlock.setUserData(new AnnotationUserData(true));
-        
-//         // 应用格式到整个 block
-//         QTextCursor annotationCursor(annotationBlock);
-//         annotationCursor.select(QTextCursor::BlockUnderCursor);
-//         annotationCursor.setCharFormat(fmt);
-//     }
-//     // qDebug() << lines;
-//     highlightCurrentLine(); // Update extra selections
-// }
 
 
 void JSCodeEditor::removeAnnotation(int lineNumber)
