@@ -41,12 +41,12 @@ HEADERS += \
     $$PWD/quickjs/libunicode-table.h \
     $$PWD/quickjs/libunicode.h \
     $$PWD/quickjs/quickjs.h \
-    $$PWD/quickjs/quickjs-atom.h \
-    $$PWD/quickjs/quickjs-libc.h \
-    $$PWD/quickjs/unicode_gen_def.h \
-    $$PWD/quickjs/quickjs-c-atomics.h \
-    $$PWD/quickjs/list.h \
-    $$PWD/quickjs/builtin-array-fromasync.h \
+    # $$PWD/quickjs/quickjs-atom.h \
+    # $$PWD/quickjs/quickjs-libc.h \
+    # $$PWD/quickjs/unicode_gen_def.h \
+    # $$PWD/quickjs/quickjs-c-atomics.h \
+    # $$PWD/quickjs/list.h \
+    # $$PWD/quickjs/builtin-array-fromasync.h \
     $$PWD/scriptEngine/include/QScriptContext.h \
     $$PWD/scriptEngine/include/QScriptEngine.h \
     $$PWD/scriptEngine/include/QScriptValue.h \
@@ -70,9 +70,10 @@ win32: {
     # 也就意味着在Linux下，DIRECT_DISPATCH会被定义为1
     # 经过测试，这样会导致JS_CallInternal()只被调用一次，从而使我们的机制失效
     # 因此需要强行让其使用  #define DIRECT_DISPATCH  0
-    # SOURCES +=  $$PWD/quickjs/quickjs-libc.c
+
+    # 添加linux系统可能用到的宏定义
     DEFINES += _GNU_SOURCE
-    DEFINES += JS_HAVE_THREADS
+    # DEFINES += JS_HAVE_THREADS
 }
 
 # 还是直接固定使用吧。否则在window下使用mingw时，又被钻了空子

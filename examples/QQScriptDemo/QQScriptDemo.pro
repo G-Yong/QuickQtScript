@@ -34,13 +34,11 @@ HEADERS += \
 FORMS += \
     mainwindow.ui
 
-
 contains(QT, script){
 } else {
     HEADERS += \
         quickjsTest.h
 }
-
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin
