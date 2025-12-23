@@ -455,6 +455,37 @@ QString QScriptValue::toString() const
             res += " }";
             return res;
         }
+        else if (JS_IsArray(m_value))
+        {
+            // 处理数组类型，输出格式为 [value1, value2, ...]
+            res = "[ ";
+            
+            int64_t len = 0;
+            if (JS_GetLength(m_ctx, m_value, &len) >= 0) {
+                for (int64_t i = 0; i < len; ++i) {
+                    if (i > 0) {
+                        res += ", ";
+                    }
+                    
+                    JSValue element = JS_GetPropertyUint32(m_ctx, m_value, (uint32_t)i);
+                    QScriptValue scriptElement(m_ctx, element, m_engine);
+                    QString elementStr = scriptElement.toString();
+                    
+                    // 如果元素是字符串，需要添加引号
+                    if (JS_IsString(element)) {
+                        elementStr = "\"" + elementStr + "\"";
+                    } else if (JS_IsUndefined(element)) {
+                        elementStr = "undefined";
+                    }
+                    
+                    res += elementStr;
+                    JS_FreeValue(m_ctx, element);
+                }
+            }
+            
+            res += " ]";
+            return res;
+        }
         else if (JS_IsSymbol(m_value))
         {
             // 处理 Symbol 类型
@@ -472,6 +503,8 @@ QString QScriptValue::toString() const
         }
         JSValue s = JS_ToString(m_ctx, m_value);
         //  有可能调用toString()失败;
+        //  对于symbol类型，也不能直接用toString;  // 可能需要在这里额外处理
+        //  对于object类型，也不会自动转成格式化的输出，例如：{ value: undefined, done: false } // 可能需要在这里额外处理
         if (JS_IsException(s))
         {
             JSValue exception = JS_GetException(m_ctx);
