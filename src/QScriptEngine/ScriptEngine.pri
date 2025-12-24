@@ -23,7 +23,6 @@ INCLUDEPATH += $$PWD/scriptEngine/include
         $$PWD/quickjs/libregexp.c \
         $$PWD/quickjs/libunicode.c \
         $$PWD/quickjs/quickjs.c \
-        # $$PWD/quickjs/quickjs-libc.c \
         $$PWD/scriptEngine/QScriptContext.cpp \
         $$PWD/scriptEngine/QScriptEngine.cpp \
         $$PWD/scriptEngine/QScriptValue.cpp \
@@ -41,12 +40,6 @@ HEADERS += \
     $$PWD/quickjs/libunicode-table.h \
     $$PWD/quickjs/libunicode.h \
     $$PWD/quickjs/quickjs.h \
-    # $$PWD/quickjs/quickjs-atom.h \
-    # $$PWD/quickjs/quickjs-libc.h \
-    # $$PWD/quickjs/unicode_gen_def.h \
-    # $$PWD/quickjs/quickjs-c-atomics.h \
-    # $$PWD/quickjs/list.h \
-    # $$PWD/quickjs/builtin-array-fromasync.h \
     $$PWD/scriptEngine/include/QScriptContext.h \
     $$PWD/scriptEngine/include/QScriptEngine.h \
     $$PWD/scriptEngine/include/QScriptValue.h \
