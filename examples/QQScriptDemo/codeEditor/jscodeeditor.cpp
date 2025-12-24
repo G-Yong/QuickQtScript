@@ -950,35 +950,50 @@ void JSCodeEditor::addAnnotation(int lineNumber, const QString &text)
         }
         block = block.next();
     }
-    
+
     if (!block.isValid()) return;
-    
+
+    // 找到该行代码下方所有连续的注释块 // 如果需要正序显示，则去掉注释
+    QTextBlock lastAnnotationBlock = block;
+    // QTextBlock nextBlock = block.next();
+    // while (nextBlock.isValid()) {
+    //     AnnotationUserData *data = dynamic_cast<AnnotationUserData *>(nextBlock.userData());
+    //     if (data && data->isAnnotation()) {
+    //         lastAnnotationBlock = nextBlock;
+    //         nextBlock = nextBlock.next();
+    //     } else {
+    //         break;
+    //     }
+    // }
+
     // 将文本按换行符分割，每一行创建一个单独的 annotation block
-    QStringList lines = text.split('\n');
-    
-    QTextCursor cursor(block);
-    cursor.movePosition(QTextCursor::EndOfBlock);
-    
+    QStringList lines = text.split('\n', Qt::SkipEmptyParts);
+
     // 设置 annotation 的格式
     QTextCharFormat fmt;
-    fmt.setForeground(QColor(200, 200, 200)); 
+    fmt.setForeground(QColor(200, 200, 200));
     fmt.setFontItalic(true);
-    
+
+    // 在最后一个注释块后面插入新注释
+    QTextCursor cursor(lastAnnotationBlock);
+    cursor.movePosition(QTextCursor::EndOfBlock);
+
     for (const QString &line : lines) {
         cursor.insertBlock();
         cursor.insertText(line);
-        
+
         QTextBlock annotationBlock = cursor.block();
         annotationBlock.setUserData(new AnnotationUserData(true));
-        
+
         // 应用格式到整个 block
         QTextCursor annotationCursor(annotationBlock);
         annotationCursor.select(QTextCursor::BlockUnderCursor);
         annotationCursor.setCharFormat(fmt);
     }
-    
+
     highlightCurrentLine(); // Update extra selections
 }
+
 
 void JSCodeEditor::removeAnnotation(int lineNumber)
 {
