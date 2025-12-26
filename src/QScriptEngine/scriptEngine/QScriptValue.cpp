@@ -414,14 +414,24 @@ QString QScriptValue::toString() const
 
     if(JS_IsException(m_value) == false)
     {
-        if (JS_IsObject(m_value) && !JS_IsFunction(m_ctx, m_value) && !JS_IsArray(m_value))
+        if (JS_IsObject(m_value) &&
+            !JS_IsFunction(m_ctx, m_value) &&
+            !JS_IsArray(m_value) &&
+            !JS_IsError(m_value) // error普通处理就行
+            )
         {
             // 处理对象，输出格式为 { prop1: value1, prop2: value2 }
             res = "{ ";
             
             JSPropertyEnum *props = nullptr;
             uint32_t plen = 0;
-            int ret = JS_GetOwnPropertyNames(m_ctx, &props, &plen, m_value, JS_GPN_STRING_MASK | JS_GPN_ENUM_ONLY);
+            int flags = JS_GPN_STRING_MASK;
+            // if(JS_IsError(m_value) == false) // 弄出来的会有stack信息，冗余
+            {
+                // error的属性是不可枚举的，强行加这个，会啥都没有
+                flags = flags | JS_GPN_ENUM_ONLY;
+            }
+            int ret = JS_GetOwnPropertyNames(m_ctx, &props, &plen, m_value, flags);
             if (ret >= 0 && props) {
                 for (uint32_t i = 0; i < plen; ++i) {
                     if (i > 0) {
