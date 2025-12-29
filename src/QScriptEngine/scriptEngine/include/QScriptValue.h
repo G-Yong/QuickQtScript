@@ -128,4 +128,7 @@ private:
 Q_DECLARE_OPERATORS_FOR_FLAGS(QScriptValue::ResolveFlags)
 Q_DECLARE_OPERATORS_FOR_FLAGS(QScriptValue::PropertyFlags)
 
+// 模块注册的时候会用到
+Q_DECLARE_METATYPE(QScriptValue)
+
 #endif // QSCRIPTENGINE_QSCRIPTVALUE_H

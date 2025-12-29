@@ -73,7 +73,6 @@ public:
 
     typedef QScriptValue (*FunctionSignature)(QScriptContext *, QScriptEngine *);
     QScriptValue newFunction(FunctionSignature signature, int length = 0);
-    // 部分功能待实现
     QScriptValue newFunction(FunctionSignature signature, const QScriptValue &prototype, int length = 0);
 
     typedef QScriptValue (*FunctionWithArgSignature)(QScriptContext *, QScriptEngine *, void *);
@@ -96,6 +95,53 @@ public:
     QScriptValue nullValue();
     QScriptValue undefinedValue();
 
+    // 模块导出项结构
+    struct ModuleExport {
+        QByteArray nameUtf8;
+        QVariant value;
+
+        // 导出项类型（用于构建 JSCFunctionListEntry）
+        enum ExportType {
+            Int32,
+            Int64,
+            Double,
+            String,
+            Object,      // 嵌套对象
+            Function     // 自定义 函数
+        };
+        ExportType type;
+
+        // 如果是函数导出，需要这些额外信息
+        uint8_t length = 0;      // 函数参数个数
+        JSCFunctionEnum cproto = JS_CFUNC_generic;
+        QScriptValue scriptValue;
+
+        // ModuleExport() = default;
+        // ModuleExport(const QString &n, const QVariant &v, ExportType t, JSCFunction *f = nullptr, uint8_t l = 0)
+        //     : nameUtf8(n.toUtf8()), value(v), type(t), cfunc(f), length(l) {}
+
+        // 构造函数：基本类型
+        ModuleExport(const QString &n, int32_t val, ExportType t)
+            : nameUtf8(n.toUtf8()), value(QVariant::fromValue(val)), type(t) {}
+        ModuleExport(const QString &n, int64_t val, ExportType t)
+            : nameUtf8(n.toUtf8()), value(QVariant::fromValue(val)), type(t) {}
+        ModuleExport(const QString &n, double val, ExportType t)
+            : nameUtf8(n.toUtf8()), value(QVariant::fromValue(val)), type(t) {}
+        ModuleExport(const QString &n, const QString &val, ExportType t)
+            : nameUtf8(n.toUtf8()), value(QVariant::fromValue(val)), type(t) {}
+        ModuleExport(const QString &n, const QVariant &val, ExportType t)
+            : nameUtf8(n.toUtf8()), value(val), type(t) {}
+
+
+        ModuleExport(const QString &n,  ExportType t,
+                     const QScriptValue &func, uint8_t l = 0)
+            : nameUtf8(n.toUtf8()), type(t), length(l), scriptValue(func) {}
+
+    };
+    void registerModule(const QString &moduleName, const QList<ModuleExport> &exports);
+    QHash<QString, QList<ModuleExport>> m_moduleRegistry;
+    // 静态模块初始化回调
+    static int moduleInitCallback(JSContext *ctx, JSModuleDef *m);
 
     static QScriptSyntaxCheckResult checkSyntax(const QString &program);
 

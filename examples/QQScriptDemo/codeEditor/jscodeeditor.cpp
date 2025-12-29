@@ -34,7 +34,7 @@ JSCodeEditor::JSCodeEditor(QWidget *parent)
     // 初始化防抖计时器与 prevTextLines
     editDebounceTimer = new QTimer(this);
     editDebounceTimer->setSingleShot(true);
-    editDebounceTimer->setInterval(20); // 防抖
+    editDebounceTimer->setInterval(10); // 防抖
     connect(editDebounceTimer, &QTimer::timeout, this, [this]() {
         emit contentEditedDebounced();
     });
@@ -59,7 +59,7 @@ JSCodeEditor::JSCodeEditor(QWidget *parent)
 // 在编辑停止（外部在非执行状态下调用）后重映射断点与执行行
 void JSCodeEditor::remapBreakpointsAfterEdit()
 {
-    QStringList currLines = document()->toPlainText().split('\n');
+    QStringList currLines = getSourceCode().split('\n');
     int oldCount = prevTextLines.size();
     int newCount = currLines.size();
     int minCount = qMin(oldCount, newCount);

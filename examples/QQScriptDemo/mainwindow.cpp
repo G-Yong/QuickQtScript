@@ -6,6 +6,7 @@
 #include <QtConcurrentRun>
 #include <QDateTime>
 #include <QScriptValueIterator>
+
 #include "codeEditor/jscodeeditor.h"
 
 #include "myscriptengineagent.h"
@@ -27,6 +28,7 @@ Q_DECLARE_METATYPE(Bar)
 #ifdef Q_OS_WIN
 #pragma execution_character_set("utf-8")
 #endif
+
 
 QScriptValue funcLog(QScriptContext *context, QScriptEngine *engine, void *data);
 QScriptValue funcSleep(QScriptContext *context, QScriptEngine *engine, void *data);
@@ -72,13 +74,13 @@ MainWindow::MainWindow(QWidget *parent)
         }
     });
 
-    // 当用户编辑停止一定时间后，如果脚本未在执行，则重映射断点和执行行
+    // 当用户编辑停止一定时间后，则重映射断点和执行行
     connect(codeEditor, &JSCodeEditor::contentEditedDebounced, this, [=]() {
-        if(mEngine.isNull()) {
-            codeEditor->remapBreakpointsAfterEdit();
-            // 将编辑后的断点同步到保存的断点集合
-            mBreakPoints[JS_FILE_NAME] = codeEditor->getBreakpoints();
-        }
+        // if(mEngine.isNull()) {
+        codeEditor->remapBreakpointsAfterEdit();
+        // 将编辑后的断点同步到保存的断点集合
+        mBreakPoints[JS_FILE_NAME] = codeEditor->getBreakpoints();
+        // }
     });
 }
 
@@ -201,6 +203,27 @@ void MainWindow::on_pushButton_start_clicked()
             //          << chkRet.errorColumnNumber()
             //          << chkRet.errorMessage();
             // return;
+
+
+            // 配置模块属性
+            QList<QScriptEngine::ModuleExport> exports;
+            exports << QScriptEngine::ModuleExport("int32", 42, QScriptEngine::ModuleExport::Int32);
+            exports << QScriptEngine::ModuleExport("int64", 666ll, QScriptEngine::ModuleExport::Int64);
+            exports << QScriptEngine::ModuleExport("double", 1.234, QScriptEngine::ModuleExport::Double);
+            exports << QScriptEngine::ModuleExport("str", QString("这是模块字符串属性"), QScriptEngine::ModuleExport::String);
+
+            // 嵌套对象需要特殊处理
+            QScriptValue obj = engine.newObject();
+            obj.setProperty("str", "这是对象字符串属性");
+            exports << QScriptEngine::ModuleExport("obj", QVariant::fromValue(obj), QScriptEngine::ModuleExport::Object);
+
+
+            // 配置模块方法
+            exports << QScriptEngine::ModuleExport("Print",
+                                                   QScriptEngine::ModuleExport::Function,
+                                                   engine.newFunction(funcLog, this), 1);
+
+            engine.registerModule("m", exports);
 
             QScriptValue result;
             result = engine.evaluate(scriptStr, JS_FILE_NAME);
@@ -353,7 +376,29 @@ QString MainWindow::debugCode()
 {
     return
 R"(
+// ==================== import外部模块测试 ====================
+console.log("\n===== import外部模块测试 =====");
+import {modulePrint as Aprint} from './moduleA.js'
+import {modulePrint as Bprint} from './moduleB.js'
+Aprint();
+Bprint();
+// ==================== import配置模块测试 ====================
+console.log("\n===== import配置模块测试 =====");
+import {Print, obj} from 'm';
+Print('直接导入配置模块m的Print函数和对象obj'); // 直接调用模块的Print
+console.log(Print)
+console.log(obj)  // 直接访问对象
+
+import * as m from 'm';
+m.Print('导入配置模块 m '); // 调用模块的Print函数
+console.log(m.int32)
+console.log(m.int64)
+console.log(m.double)
+console.log(m.str)
+console.log(m.obj.str) // 通过模块前缀来访问对象
+console.log(m.obj)
 // ==================== Symbol测试 ====================
+console.log("\n===== Symbol测试 =====");
 let s1 = Symbol('foo');
 let s2 = Symbol('bar');
 console.log(s1) // Symbol(foo)
