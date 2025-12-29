@@ -8,7 +8,6 @@
 #include <QScriptValueIterator>
 
 #include "codeEditor/jscodeeditor.h"
-
 #include "myscriptengineagent.h"
 
 // #include "myqobject.h"
@@ -28,7 +27,6 @@ Q_DECLARE_METATYPE(Bar)
 #ifdef Q_OS_WIN
 #pragma execution_character_set("utf-8")
 #endif
-
 
 QScriptValue funcLog(QScriptContext *context, QScriptEngine *engine, void *data);
 QScriptValue funcSleep(QScriptContext *context, QScriptEngine *engine, void *data);

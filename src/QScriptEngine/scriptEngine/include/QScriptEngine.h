@@ -116,10 +116,6 @@ public:
         JSCFunctionEnum cproto = JS_CFUNC_generic;
         QScriptValue scriptValue;
 
-        // ModuleExport() = default;
-        // ModuleExport(const QString &n, const QVariant &v, ExportType t, JSCFunction *f = nullptr, uint8_t l = 0)
-        //     : nameUtf8(n.toUtf8()), value(v), type(t), cfunc(f), length(l) {}
-
         // 构造函数：基本类型
         ModuleExport(const QString &n, int32_t val, ExportType t)
             : nameUtf8(n.toUtf8()), value(QVariant::fromValue(val)), type(t) {}
@@ -132,7 +128,7 @@ public:
         ModuleExport(const QString &n, const QVariant &val, ExportType t)
             : nameUtf8(n.toUtf8()), value(val), type(t) {}
 
-
+        // 构造函数：函数类型
         ModuleExport(const QString &n,  ExportType t,
                      const QScriptValue &func, uint8_t l = 0)
             : nameUtf8(n.toUtf8()), type(t), length(l), scriptValue(func) {}

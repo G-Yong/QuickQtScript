@@ -136,7 +136,6 @@ static JSModuleDef *js_module_loader_qt(JSContext *ctx,
                 break;
 
             case QScriptEngine::ModuleExport::String:
-                // 这里字符串属性的处理方法还要修改
                 entries.push_back(JS_PROP_STRING_DEF_CPP(
                     name,
                     exp.value.toString().toUtf8().constData(),
@@ -168,6 +167,7 @@ static JSModuleDef *js_module_loader_qt(JSContext *ctx,
         return m;
     }
 
+    // 默认路径为main.cpp的目录
     moduleName = "../../" + moduleName;
     // 处理文件路径
     QString filename = QDir::current().filePath(moduleName);
@@ -203,7 +203,7 @@ static JSModuleDef *js_module_loader_qt(JSContext *ctx,
                           JS_EVAL_TYPE_MODULE | JS_EVAL_FLAG_COMPILE_ONLY);
 
     if (JS_IsException(val)) {
-        qDebug() << "模块存在语法错误！！"; // 先测试功能，后面在整合到别的文件中
+        qDebug() << "模块存在语法错误！！";
         return nullptr;
     }
 
@@ -1072,12 +1072,13 @@ int QScriptEngine::moduleInitCallback(JSContext *ctx, JSModuleDef *m) {
             break;
         }
 
-        // 设置导出值（现在 var_ref 已存在，不会崩溃）
+        // 设置导出值
         int ret = JS_SetModuleExport(ctx, m, exp.nameUtf8.constData(), val);
         if (ret < 0) {
             qWarning() << "Failed to set module export:" << exp.nameUtf8.constData();
         }
 
+        // 这里不能释放value，不然释放运行时调用GC的时候会报错
         // JS_FreeValue(ctx, val);
         JS_FreeAtom(ctx, atom);
     }
