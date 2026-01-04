@@ -61,42 +61,44 @@ QString QScriptValueIterator::name() const
     return res;
 }
 
-// 使用JSON方法深复制
-static JSValue js_json_deep_clone(JSContext *ctx, JSValueConst this_val) {
-    if (JS_IsFunction(ctx, this_val)) {
-        return JS_DupValue(ctx, this_val);
-    }
+// 原本的js_json_deep_clone
+// static JSValue js_json_deep_clone(JSContext *ctx, JSValueConst this_val) {
+//     int32_t tag = JS_VALUE_GET_TAG(this_val);
 
-    // 获取JSON对象
-    JSValue global    = JS_GetGlobalObject(ctx);
-    JSValue json      = JS_GetPropertyStr(ctx, global, "JSON");
-    JSValue stringify = JS_GetPropertyStr(ctx, json,   "stringify");
-    JSValue parse     = JS_GetPropertyStr(ctx, json,   "parse");
+//     // 1. 基本类型：使用JS_NewXxx创建新值，避免架构特定的内存对齐问题
+//     switch (tag) {
+//     case JS_TAG_BOOL:
+//         return JS_NewBool(ctx, JS_VALUE_GET_BOOL(this_val));
 
-    // 序列化
-    JSValue str = JS_Call(ctx, stringify, json, 1, &this_val);
-    if (JS_IsException(str)) {
-        JS_FreeValue(ctx, str);
-        JS_FreeValue(ctx, parse);
-        JS_FreeValue(ctx, stringify);
-        JS_FreeValue(ctx, json);
-        JS_FreeValue(ctx, global);
-        return JS_EXCEPTION;
-    }
+//     case JS_TAG_INT:
+//         return JS_NewInt32(ctx, JS_VALUE_GET_INT(this_val));
 
-    // 反序列化
-    JSValue cloned = JS_Call(ctx, parse, json, 1, &str);
+//     // 序列化
+//     JSValue str = JS_Call(ctx, stringify, json, 1, &this_val);
+//     if (JS_IsException(str)) {
+//         JS_FreeValue(ctx, str);
+//         JS_FreeValue(ctx, parse);
+//         JS_FreeValue(ctx, stringify);
+//         JS_FreeValue(ctx, json);
+//         JS_FreeValue(ctx, global);
+//         return JS_EXCEPTION;
+//     }
 
-    // 清理
-    JS_FreeValue(ctx, str);
-    JS_FreeValue(ctx, parse);
-    JS_FreeValue(ctx, stringify);
-    JS_FreeValue(ctx, json);
-    JS_FreeValue(ctx, global);
+//     // 反序列化
+//     JSValue cloned = JS_Call(ctx, parse, json, 1, &str);
 
-    return cloned;
-}
+//     // 清理
+//     JS_FreeValue(ctx, str);
+//     JS_FreeValue(ctx, parse);
+//     JS_FreeValue(ctx, stringify);
+//     JS_FreeValue(ctx, json);
+//     JS_FreeValue(ctx, global);
 
+//     return cloned;
+// }
+
+// 针对LoongArch64架构优化的深拷贝函数
+// 深拷贝的通用规则：所有 ECMAScript 不可变类型（Primitive values），深拷贝时都应该共享引用，而非创建新实例。
 static JSValue js_deep_clone(JSContext *ctx, JSValueConst this_val) {
     int32_t tag = JS_VALUE_GET_TAG(this_val);
 
@@ -261,15 +263,14 @@ QScriptValue QScriptValueIterator::value() const
     JSContext *ctx = m_object.engine() ? m_object.engine()->ctx() : nullptr;
     if (!ctx)
         return QScriptValue();
-
     // 目前经过测试，发现在LoongArch64设备中，假如使用浅复制会导致在后续操作中发生segment fail / bus error
     // x86设备无法复现
     QScriptValue qVal;
     if(1) // 深复制
     {
         JSValue v = JS_GetProperty(ctx, m_object.rawValue(), m_currentAtom);
-        // auto k = js_json_deep_clone(ctx, v);
         auto k = js_deep_clone(ctx, v);
+        // auto k = js_json_deep_clone(ctx, v);
         JS_FreeValue(ctx, v);
 
         qVal = QScriptValue(ctx, k, m_object.engine());

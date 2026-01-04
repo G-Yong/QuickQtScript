@@ -56,7 +56,7 @@ JSCodeEditor::JSCodeEditor(QWidget *parent)
     highlightCurrentLine();
 }
 
-// 在编辑停止（外部在非执行状态下调用）后重映射断点与执行行
+// 在编辑停止后重映射断点与执行行
 void JSCodeEditor::remapBreakpointsAfterEdit()
 {
     QStringList currLines = getSourceCode().split('\n');

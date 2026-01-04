@@ -45,10 +45,12 @@ private slots:
 
     void on_pushButton_loadDefault_clicked();
     void on_pushButton_loadDebug_clicked();
+    void on_pushButton_loadAsnyc_clicked();
 
 private:
     QString defaultCode();
     QString debugCode();
+    QString asnycCode();
 
 private:
     Ui::MainWindow *ui;
