@@ -97,7 +97,6 @@ QString QScriptValueIterator::name() const
 //     return cloned;
 // }
 
-// 针对LoongArch64架构优化的深拷贝函数
 // 深拷贝的通用规则：所有 ECMAScript 不可变类型（Primitive values），深拷贝时都应该共享引用，而非创建新实例。
 static JSValue js_deep_clone(JSContext *ctx, JSValueConst this_val) {
     int32_t tag = JS_VALUE_GET_TAG(this_val);
@@ -129,6 +128,9 @@ static JSValue js_deep_clone(JSContext *ctx, JSValueConst this_val) {
         JSValue ret = JS_NewStringLen(ctx, str, len);
         JS_FreeCString(ctx, str);
         return ret;
+
+        // // 实际上应该返回JS_DupValue，因为String是不可变类型
+        // return JS_DupValue(ctx, this_val);
     }
 
     case JS_TAG_SYMBOL: {
@@ -149,6 +151,9 @@ static JSValue js_deep_clone(JSContext *ctx, JSValueConst this_val) {
         JS_FreeValue(ctx, desc_val);
 
         return ret;
+
+        // // 实际上应该返回JS_DupValue，因为Symbol是不可变类型
+        // return JS_DupValue(ctx, this_val);
     }
 
     // 对于其他基本类型（如果存在）使用默认处理
