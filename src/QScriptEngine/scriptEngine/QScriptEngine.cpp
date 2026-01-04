@@ -509,7 +509,7 @@ QScriptEngine::QScriptEngine(QObject *parent)
             "globalThis.clearInterval = os.clearInterval;\n"
             "globalThis.setTimeout = os.setTimeout;\n"
             ;
-        evaluate(str, "<sys_module_init>");
+        evaluate(str, "<sys_module_init>", 0, true);
     }
 }
 
