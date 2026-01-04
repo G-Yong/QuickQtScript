@@ -1,4 +1,4 @@
-#ifndef JSSYNTAXHIGHLIGHTER_H
+﻿#ifndef JSSYNTAXHIGHLIGHTER_H
 #define JSSYNTAXHIGHLIGHTER_H
 
 #include <QSyntaxHighlighter>
@@ -49,6 +49,7 @@ private:
     QTextCharFormat functionFormat;
     QTextCharFormat numberFormat;
     QTextCharFormat operatorFormat;
+    QTextCharFormat regExpressFormat;
 };
 
 #endif // JSSYNTAXHIGHLIGHTER_H

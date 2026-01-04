@@ -2,6 +2,7 @@
 #include <QScriptValue>
 #include <QScriptContext>
 #include <QScriptEngineAgent>
+#include <QScriptLibrary>
 #include <QMetaProperty>
 
 #include <QDebug>
@@ -491,6 +492,25 @@ QScriptEngine::QScriptEngine(QObject *parent)
         JS_FreeValue(m_ctx, g);
     }
     JS_SetModuleLoaderFunc(m_rt, nullptr, js_module_loader_qt, this); // 传递 this
+
+    // 这里可以放在QScriptEngine的构造函数，或者调用接口的形式来初始化
+    {
+        js_std_init_handlers(m_rt);
+        js_init_module_std(m_ctx, "std");
+        js_init_module_os(m_ctx, "os");
+
+        // globalThis.xx = ... 等价于 engine.globalObject().setProperty("xx", ...)
+        const char *str =
+            "import * as std from 'std';\n"
+            "import * as os from 'os';\n"
+            "globalThis.std = std;\n"
+            "globalThis.os = os;\n"
+            "globalThis.setInterval = os.setInterval;\n"
+            "globalThis.clearInterval = os.clearInterval;\n"
+            "globalThis.setTimeout = os.setTimeout;\n"
+            ;
+        evaluate(str, "<sys_module_init>");
+    }
 }
 
 QScriptEngine::~QScriptEngine()
@@ -572,7 +592,7 @@ QScriptContext *QScriptEngine::currentContext() const
     return mCurCtx;
 }
 
-QScriptValue QScriptEngine::evaluate(const QString &program, const QString &fileName, int lineNumber)
+QScriptValue QScriptEngine::evaluate(const QString &program, const QString &fileName, int lineNumber, bool isModule)
 {
     if (!m_ctx)
         return QScriptValue();
@@ -603,8 +623,7 @@ QScriptValue QScriptEngine::evaluate(const QString &program, const QString &file
     // 使用带有flag的eval调用函数
     JSEvalOptions options;
     options.version    = JS_EVAL_OPTIONS_VERSION;
-    // options.eval_flags = JS_EVAL_TYPE_MODULE;  //JS_EVAL_TYPE_GLOBAL
-    options.eval_flags = JS_EVAL_TYPE_GLOBAL;
+    options.eval_flags = isModule ? JS_EVAL_TYPE_MODULE : JS_EVAL_TYPE_GLOBAL;
     options.filename   = fn;
     options.line_num   = (lineNumber > 0) ? lineNumber : 1;
 
@@ -612,6 +631,7 @@ QScriptValue QScriptEngine::evaluate(const QString &program, const QString &file
     // JS_SetModuleLoaderFunc(m_rt, nullptr, js_module_loader_qt, nullptr);
 
     val = JS_Eval2(m_ctx, ba.constData(), ba.size(), &options);
+    js_std_loop(m_ctx); // 开启事件循环
     QScriptValue qVal = QScriptValue(m_ctx, val, const_cast<QScriptEngine*>(this));
 
     // 需要通知agent
