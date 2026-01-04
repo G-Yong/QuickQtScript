@@ -5,6 +5,9 @@
 #include <QMetaProperty>
 
 #include <QDebug>
+#include <QFile>
+#include <QFileInfo>
+#include <QDir>
 
 #include <mutex>
 #include <vector>
@@ -12,6 +15,202 @@
 
 extern "C" {
 #include "quickjs.h"
+}
+
+// 辅助函数：创建 C 函数导出项
+inline JSCFunctionListEntry JS_CFUNC_DEF_CPP(const char* name, uint8_t length, JSCFunction* func1) {
+    JSCFunctionListEntry entry = {};
+    entry.name = name;
+    entry.prop_flags = JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE;
+    entry.def_type = JS_DEF_CFUNC;
+    entry.magic = 0;
+    entry.u.func.length = length;
+    entry.u.func.cproto = JS_CFUNC_generic;
+    entry.u.func.cfunc.generic = func1;
+    return entry;
+}
+
+// 辅助函数：创建 int32 属性导出项
+inline JSCFunctionListEntry JS_PROP_INT32_DEF_CPP(const char* name, int32_t val, uint8_t prop_flags) {
+    JSCFunctionListEntry entry = {};
+    entry.name = name;
+    entry.prop_flags = prop_flags;
+    entry.def_type = JS_DEF_PROP_INT32;
+    entry.magic = 0;
+    entry.u.i32 = val;
+    return entry;
+}
+
+// 辅助函数：创建 int64 属性导出项
+inline JSCFunctionListEntry JS_PROP_INT64_DEF_CPP(const char* name, int64_t val, uint8_t prop_flags) {
+    JSCFunctionListEntry entry = {};
+    entry.name = name;
+    entry.prop_flags = prop_flags;
+    entry.def_type = JS_DEF_PROP_INT64;
+    entry.magic = 0;
+    entry.u.i64 = val;
+    return entry;
+}
+
+// 辅助函数：创建 double 属性导出项
+inline JSCFunctionListEntry JS_PROP_DOUBLE_DEF_CPP(const char* name, double val, uint8_t prop_flags) {
+    JSCFunctionListEntry entry = {};
+    entry.name = name;
+    entry.prop_flags = prop_flags;
+    entry.def_type = JS_DEF_PROP_DOUBLE;
+    entry.magic = 0;
+    entry.u.f64 = val;
+    return entry;
+}
+
+// 辅助函数：创建字符串属性导出项
+inline JSCFunctionListEntry JS_PROP_STRING_DEF_CPP(const char* name, const char* cstr, uint8_t prop_flags) {
+    JSCFunctionListEntry entry = {};
+    entry.name = name;
+    entry.prop_flags = prop_flags;
+    entry.def_type = JS_DEF_PROP_STRING;
+    entry.magic = 0;
+    entry.u.str = cstr;
+    return entry;
+}
+
+// 辅助函数：创建对象导出项
+inline JSCFunctionListEntry JS_OBJECT_DEF_CPP(const char* name, const JSCFunctionListEntry* tab, int len, uint8_t prop_flags) {
+    JSCFunctionListEntry entry = {};
+    entry.name = name;
+    entry.prop_flags = prop_flags;
+    entry.def_type = JS_DEF_OBJECT;
+    entry.magic = 0;
+    entry.u.prop_list.tab = tab;
+    entry.u.prop_list.len = len;
+    return entry;
+}
+
+// 读取本地模块加载函数
+static JSModuleDef *js_module_loader_qt(JSContext *ctx,
+                                        const char *module_name,
+                                        void *opaque) {
+    QScriptEngine *engine = static_cast<QScriptEngine*>(opaque);
+    if (!engine) return nullptr;
+
+    QString moduleName(module_name);
+
+    // 检查是否是已注册的 C++ 模块
+    if (engine->m_moduleRegistry.contains(moduleName)) {
+        // 1. 先创建模块
+        JSModuleDef *m = JS_NewCModule(ctx, module_name, QScriptEngine::moduleInitCallback);
+        if (!m) return nullptr;
+
+        // 2. 动态构建导出声明列表
+        auto exports = engine->m_moduleRegistry.value(moduleName);
+        std::vector<JSCFunctionListEntry> entries;
+        entries.reserve(exports.size());
+
+        for (const auto &exp : exports) {
+            const char *name = exp.nameUtf8.constData();
+
+            // 根据类型构建对应的导出项
+            switch (exp.type) {
+            case QScriptEngine::ModuleExport::Int32:
+                entries.push_back(JS_PROP_INT32_DEF_CPP(
+                    name,
+                    exp.value.toInt(),
+                    JS_PROP_C_W_E  // 可写、可配置、可枚举
+                    ));
+                break;
+
+            case QScriptEngine::ModuleExport::Int64:
+                entries.push_back(JS_PROP_INT64_DEF_CPP(
+                    name,
+                    exp.value.toLongLong(),
+                    JS_PROP_C_W_E
+                    ));
+                break;
+
+            case QScriptEngine::ModuleExport::Double:
+                entries.push_back(JS_PROP_DOUBLE_DEF_CPP(
+                    name,
+                    exp.value.toDouble(),
+                    JS_PROP_C_W_E
+                    ));
+                break;
+
+            case QScriptEngine::ModuleExport::String:
+                entries.push_back(JS_PROP_STRING_DEF_CPP(
+                    name,
+                    exp.value.toString().toUtf8().constData(),
+                    JS_PROP_C_W_E
+                    ));
+                break;
+
+            case QScriptEngine::ModuleExport::Object:
+                // 对象类型在 moduleInitCallback 中动态设置
+                // 这里只需声明为普通变量
+                entries.push_back(JS_PROP_INT32_DEF_CPP(name, 0, JS_PROP_C_W_E)); // 占位
+                break;
+
+            case QScriptEngine::ModuleExport::Function:
+                // 函数类型需要特别注意
+                if (exp.scriptValue.isValid() && exp.scriptValue.isFunction()) {
+                    // QScriptValue 函数 - 添加占位符，将在 init 回调中设置实际值
+                    entries.push_back(JS_PROP_INT32_DEF_CPP(name, 0, JS_PROP_C_W_E));
+                }
+                break;
+            }
+        }
+
+
+        if (!entries.empty()) {
+            JS_AddModuleExportList(ctx, m, entries.data(), entries.size());
+        }
+
+        return m;
+    }
+
+    // 默认路径为main.cpp的目录
+    moduleName = "../../" + moduleName;
+    // 处理文件路径
+    QString filename = QDir::current().filePath(moduleName);
+
+    // 检查文件是否存在
+    QFileInfo fileInfo(filename);
+    if (!fileInfo.exists()) {
+        qDebug() << "Module file not found:" << filename;
+        JS_ThrowReferenceError(ctx, "Cannot find module: %s", module_name);
+        return nullptr;
+    }
+
+    // 获取绝对路径
+    QString absolutePath = fileInfo.absoluteFilePath();
+    qDebug() << "Absolute path:" << absolutePath;
+
+    // 使用 QFile 读取文件
+    QFile file(absolutePath);
+    if (!file.open(QIODevice::ReadOnly)) {
+        qDebug() << "Failed to open file:" << absolutePath;
+        JS_ThrowReferenceError(ctx, "Cannot open module: %s", module_name);
+        return nullptr;
+    }
+
+    QByteArray content = file.readAll();
+    file.close();
+
+    // 编译并执行模块
+    JSValue val = JS_Eval(ctx,
+                          content.constData(),
+                          content.size(),
+                          module_name,
+                          JS_EVAL_TYPE_MODULE | JS_EVAL_FLAG_COMPILE_ONLY);
+
+    if (JS_IsException(val)) {
+        qDebug() << "模块存在语法错误！！";
+        return nullptr;
+    }
+
+    // 获取并返回模块对象
+    JSModuleDef *m = static_cast<JSModuleDef *>JS_VALUE_GET_PTR(val);
+    JS_FreeValue(ctx, val);
+    return m;
 }
 
 // 下面这堆操作是为了实现 QScriptEngine::ScriptOwnership
@@ -229,6 +428,8 @@ static QScriptValue functionSignatureAdapter(QScriptContext *context, QScriptEng
 QScriptEngine::QScriptEngine(QObject *parent)
     : QObject(parent)
 {
+    qRegisterMetaType<QScriptValue>();
+
     m_rt = JS_NewRuntime();
     if(!m_rt)
     {
@@ -289,12 +490,13 @@ QScriptEngine::QScriptEngine(QObject *parent)
         // 但是，在release时，假如加上了，又会报0xc000005错误,估计是重复释放
         JS_FreeValue(m_ctx, g);
     }
-
+    JS_SetModuleLoaderFunc(m_rt, nullptr, js_module_loader_qt, this); // 传递 this
 }
 
 QScriptEngine::~QScriptEngine()
 {
     clearDefaultPrototypes(); // 首先清空存储的默认类型，不然会崩溃
+    
     if(agent() != nullptr)
     {
         // 这里会导致程序崩溃，后面再处理
@@ -303,14 +505,21 @@ QScriptEngine::~QScriptEngine()
         // }
     }
 
+    // 清理模块系统
+    m_moduleRegistry.clear();
+    JS_SetModuleLoaderFunc(m_rt, nullptr, nullptr, nullptr);
+    JS_SetInterruptHandler(m_rt, nullptr, nullptr);
+    
     // 要先释放申请的资源，最后再释放引擎
     if(mCurCtx != nullptr)
     {
         delete mCurCtx;
+        mCurCtx = nullptr;
     }
     if(mGlobalObject != nullptr)
     {
         delete mGlobalObject;
+        mGlobalObject = nullptr;
     }
 
     if (m_ctx) {
@@ -319,7 +528,9 @@ QScriptEngine::~QScriptEngine()
         JS_FreeContext(m_ctx);
         m_ctx = nullptr;
     }
+
     if (m_rt) {
+        JS_SetRuntimeOpaque(m_rt, nullptr);
         JS_FreeRuntime(m_rt);
         m_rt = nullptr;
     }
@@ -392,9 +603,12 @@ QScriptValue QScriptEngine::evaluate(const QString &program, const QString &file
     // 使用带有flag的eval调用函数
     JSEvalOptions options;
     options.version    = JS_EVAL_OPTIONS_VERSION;
-    options.eval_flags = JS_EVAL_TYPE_GLOBAL;
+    options.eval_flags = JS_EVAL_TYPE_MODULE;  //JS_EVAL_TYPE_GLOBAL
     options.filename   = fn;
     options.line_num   = (lineNumber > 0) ? lineNumber : 1;
+
+    // 这是加载外部的模块（js实现）
+    // JS_SetModuleLoaderFunc(m_rt, nullptr, js_module_loader_qt, nullptr);
 
     val = JS_Eval2(m_ctx, ba.constData(), ba.size(), &options);
     QScriptValue qVal = QScriptValue(m_ctx, val, const_cast<QScriptEngine*>(this));
@@ -808,6 +1022,70 @@ QObject *QScriptEngine::qobjectFromJSValue(JSContext *ctx, JSValueConst val) con
     return w->obj;
 }
 
+int QScriptEngine::moduleInitCallback(JSContext *ctx, JSModuleDef *m) {
+    QScriptEngine *engine = static_cast<QScriptEngine*>(JS_GetContextOpaque(ctx));
+    if (!engine) return -1;
+
+    // 获取模块名称
+    JSAtom nameAtom = JS_GetModuleName(ctx, m);
+    const char *nameCStr = JS_AtomToCString(ctx, nameAtom);
+    QString moduleName = QString::fromUtf8(nameCStr);
+    JS_FreeCString(ctx, nameCStr);
+    JS_FreeAtom(ctx, nameAtom);
+
+    // 获取导出列表
+    auto exports = engine->m_moduleRegistry.value(moduleName);
+
+    // 现在可以安全地设置导出值（var_ref 已存在）
+    for (const auto &exp : exports) {
+        JSAtom atom = JS_NewAtom(ctx,exp.nameUtf8.constData());
+        JSValue val = JS_UNDEFINED;
+
+        // 根据类型创建 JSValue
+        switch (exp.type) {
+        case ModuleExport::Int32:
+            val = JS_NewInt32(ctx, exp.value.toInt());
+            break;
+        case ModuleExport::Int64:
+            val = JS_NewInt64(ctx, exp.value.toLongLong());
+            break;
+        case ModuleExport::Double:
+            val = JS_NewFloat64(ctx, exp.value.toDouble());
+            break;
+        case ModuleExport::String:
+            val = JS_NewStringLen(ctx, exp.value.toString().toUtf8().constData(), exp.value.toString().toUtf8().size());
+            break;
+        case ModuleExport::Object:
+            // 处理嵌套对象（如 QObject）
+            if (exp.value.userType() == qMetaTypeId<QScriptValue>()) {
+                QScriptValue sv = exp.value.value<QScriptValue>();
+                val = JS_DupValue(ctx, sv.rawValue());
+            } else {
+                val = JS_NewObject(ctx); // 空对象占位
+            }
+            break;
+        case ModuleExport::Function:
+            // QScriptValue 函数需要在这里设置实际值
+            if (exp.scriptValue.isValid()) {
+                val = JS_DupValue(ctx, exp.scriptValue.rawValue());
+            }
+            break;
+        }
+
+        // 设置导出值
+        int ret = JS_SetModuleExport(ctx, m, exp.nameUtf8.constData(), val);
+        if (ret < 0) {
+            qWarning() << "Failed to set module export:" << exp.nameUtf8.constData();
+        }
+
+        // 这里不能释放value，不然释放运行时调用GC的时候会报错
+        // JS_FreeValue(ctx, val);
+        JS_FreeAtom(ctx, atom);
+    }
+
+    return 0; // 成功
+}
+
 bool QScriptEngine::hasUncaughtException() const
 {
     if (!m_ctx)
@@ -850,6 +1128,12 @@ QScriptValue QScriptEngine::undefinedValue()
 {
     if (!m_ctx) return QScriptValue();
     return QScriptValue(m_ctx, JS_UNDEFINED, this);
+}
+
+void QScriptEngine::registerModule(const QString &moduleName, const QList<ModuleExport> &exports)
+{
+    // 保存到注册表，供模块加载器使用
+    m_moduleRegistry[moduleName] = exports;
 }
 
 QScriptSyntaxCheckResult QScriptEngine::checkSyntax(const QString &program)
