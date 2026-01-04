@@ -603,7 +603,8 @@ QScriptValue QScriptEngine::evaluate(const QString &program, const QString &file
     // 使用带有flag的eval调用函数
     JSEvalOptions options;
     options.version    = JS_EVAL_OPTIONS_VERSION;
-    options.eval_flags = JS_EVAL_TYPE_MODULE;  //JS_EVAL_TYPE_GLOBAL
+    // options.eval_flags = JS_EVAL_TYPE_MODULE;  //JS_EVAL_TYPE_GLOBAL
+    options.eval_flags = JS_EVAL_TYPE_GLOBAL;
     options.filename   = fn;
     options.line_num   = (lineNumber > 0) ? lineNumber : 1;
 
