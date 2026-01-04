@@ -61,39 +61,17 @@ QString QScriptValueIterator::name() const
     return res;
 }
 
-// 这种深复制方式存在问题
-JSValue JS_DeepCloneValue(JSContext *ctx, JSValueConst val) {
-    size_t size = 0;
-    // 使用 JS_WRITE_OBJ_REFERENCE 标志来支持对象引用，从而处理循环依赖
-    int write_flags = JS_WRITE_OBJ_REFERENCE;
-
-    // 1. 将JSValue序列化为字节数组
-    uint8_t *buf = JS_WriteObject(ctx, &size, val, write_flags);
-    if (!buf) {
-        // 如果序列化失败（例如，包含不支持的外部C对象），则返回异常
-        return JS_EXCEPTION;
-    }
-
-    // 2. 从字节数组反序列化为新的JSValue
-    // 同样需要 JS_READ_OBJ_REFERENCE 标志来正确解析对象引用
-    int read_flags = JS_READ_OBJ_REFERENCE;
-    JSValue cloned_val = JS_ReadObject(ctx, buf, size, read_flags);
-
-    // 3. 释放临时的字节数组
-    // 注意：JS_WriteObject返回的内存需要使用js_free_rt释放
-    js_free_rt(JS_GetRuntime(ctx), buf);
-
-    return cloned_val; // 返回深复制后的新JSValue
-}
-
 // 使用JSON方法深复制
 static JSValue js_json_deep_clone(JSContext *ctx, JSValueConst this_val) {
+    if (JS_IsFunction(ctx, this_val)) {
+        return JS_DupValue(ctx, this_val);
+    }
 
     // 获取JSON对象
-    JSValue global = JS_GetGlobalObject(ctx);
-    JSValue json = JS_GetPropertyStr(ctx, global, "JSON");
-    JSValue stringify = JS_GetPropertyStr(ctx, json, "stringify");
-    JSValue parse = JS_GetPropertyStr(ctx, json, "parse");
+    JSValue global    = JS_GetGlobalObject(ctx);
+    JSValue json      = JS_GetPropertyStr(ctx, global, "JSON");
+    JSValue stringify = JS_GetPropertyStr(ctx, json,   "stringify");
+    JSValue parse     = JS_GetPropertyStr(ctx, json,   "parse");
 
     // 序列化
     JSValue str = JS_Call(ctx, stringify, json, 1, &this_val);
@@ -119,6 +97,112 @@ static JSValue js_json_deep_clone(JSContext *ctx, JSValueConst this_val) {
     return cloned;
 }
 
+// 修改后的深拷贝函数，正确处理函数和所有JS类型
+// 此函数在loongarch64下还是有问题
+static JSValue js_json_deep_clone1(JSContext *ctx, JSValueConst this_val) {
+    uint32_t tag = JS_VALUE_GET_TAG(this_val);
+
+    // 1. 基本类型和Symbol直接复制引用
+    if (tag <= JS_TAG_UNDEFINED || tag == JS_TAG_BOOL || tag == JS_TAG_INT ||
+        tag == JS_TAG_FLOAT64 || tag == JS_TAG_NULL || tag == JS_TAG_STRING ||
+        tag == JS_TAG_SYMBOL) {
+
+        return JS_DupValue(ctx, this_val);
+    }
+
+    // 2. 对象类型需要递归处理
+    if (tag == JS_TAG_OBJECT) {
+        // 2.1 数组处理：递归复制每个元素
+        if (JS_IsArray(this_val)) {
+            int64_t len;
+            if (JS_GetLength(ctx, this_val, &len) < 0)
+                return JS_EXCEPTION;
+
+            JSValue new_array = JS_NewArray(ctx);
+            if (JS_IsException(new_array))
+                return JS_EXCEPTION;
+
+            for (int64_t i = 0; i < len; i++) {
+                JSValue elem = JS_GetPropertyUint32(ctx, this_val, (uint32_t)i);
+                if (JS_IsException(elem)) {
+                    JS_FreeValue(ctx, new_array);
+                    return JS_EXCEPTION;
+                }
+
+                JSValue cloned_elem = js_json_deep_clone1(ctx, elem);
+                JS_FreeValue(ctx, elem);
+
+                if (JS_IsException(cloned_elem)) {
+                    JS_FreeValue(ctx, new_array);
+                    return JS_EXCEPTION;
+                }
+
+                if (JS_SetPropertyUint32(ctx, new_array, (uint32_t)i, cloned_elem) < 0) {
+                    JS_FreeValue(ctx, cloned_elem);
+                    JS_FreeValue(ctx, new_array);
+                    return JS_EXCEPTION;
+                }
+            }
+
+            return new_array;
+        }
+
+        // 2.2 函数处理：函数是不可变的，直接返回引用即可
+        if (JS_IsFunction(ctx, this_val)) {
+            return JS_DupValue(ctx, this_val);
+        }
+
+        // 2.3 普通对象：复制所有可枚举属性（包括字符串和Symbol）
+        JSPropertyEnum *props = NULL;
+        uint32_t prop_count = 0;
+
+        // 获取所有可枚举属性（字符串+Symbol）
+        int flags = JS_GPN_STRING_MASK | JS_GPN_SYMBOL_MASK | JS_GPN_ENUM_ONLY;
+        if (JS_GetOwnPropertyNames(ctx, &props, &prop_count, this_val, flags) < 0) {
+            return JS_EXCEPTION;
+        }
+
+        JSValue new_obj = JS_NewObject(ctx);
+        if (JS_IsException(new_obj)) {
+            JS_FreePropertyEnum(ctx, props, prop_count);
+            return JS_EXCEPTION;
+        }
+
+        // 递归复制每个属性值
+        for (uint32_t i = 0; i < prop_count; i++) {
+            JSAtom atom = props[i].atom;
+            JSValue prop_val = JS_GetProperty(ctx, this_val, atom);
+            if (JS_IsException(prop_val)) {
+                JS_FreePropertyEnum(ctx, props, prop_count);
+                JS_FreeValue(ctx, new_obj);
+                return JS_EXCEPTION;
+            }
+
+            JSValue cloned_val = js_json_deep_clone1(ctx, prop_val);
+            JS_FreeValue(ctx, prop_val);
+
+            if (JS_IsException(cloned_val)) {
+                JS_FreePropertyEnum(ctx, props, prop_count);
+                JS_FreeValue(ctx, new_obj);
+                return JS_EXCEPTION;
+            }
+
+            if (JS_SetProperty(ctx, new_obj, atom, cloned_val) < 0) {
+                JS_FreeValue(ctx, cloned_val);
+                JS_FreePropertyEnum(ctx, props, prop_count);
+                JS_FreeValue(ctx, new_obj);
+                return JS_EXCEPTION;
+            }
+        }
+
+        JS_FreePropertyEnum(ctx, props, prop_count);
+        return new_obj;
+    }
+
+    // 3. 其他未知类型直接复制
+    return JS_DupValue(ctx, this_val);
+}
+
 QScriptValue QScriptValueIterator::value() const
 {
     if (!m_currentAtom)
@@ -134,7 +218,6 @@ QScriptValue QScriptValueIterator::value() const
     {
         JSValue v = JS_GetProperty(ctx, m_object.rawValue(), m_currentAtom);
         auto k = js_json_deep_clone(ctx, v);
-        // auto k = JS_DeepCloneValue(ctx, v); // 依然会有问题
         JS_FreeValue(ctx, v);
 
         qVal = QScriptValue(ctx, k, m_object.engine());
