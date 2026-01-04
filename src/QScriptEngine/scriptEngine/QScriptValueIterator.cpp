@@ -97,17 +97,65 @@ static JSValue js_json_deep_clone(JSContext *ctx, JSValueConst this_val) {
     return cloned;
 }
 
-// 修改后的深拷贝函数，正确处理函数和所有JS类型
-// 此函数在loongarch64下还是有问题
-static JSValue js_json_deep_clone1(JSContext *ctx, JSValueConst this_val) {
-    uint32_t tag = JS_VALUE_GET_TAG(this_val);
+static JSValue js_deep_clone(JSContext *ctx, JSValueConst this_val) {
+    int32_t tag = JS_VALUE_GET_TAG(this_val);
 
-    // 1. 基本类型和Symbol直接复制引用
-    if (tag <= JS_TAG_UNDEFINED || tag == JS_TAG_BOOL || tag == JS_TAG_INT ||
-        tag == JS_TAG_FLOAT64 || tag == JS_TAG_NULL || tag == JS_TAG_STRING ||
-        tag == JS_TAG_SYMBOL) {
+    // 1. 基本类型：使用JS_NewXxx创建新值，避免架构特定的内存对齐问题
+    switch (tag) {
+    case JS_TAG_BOOL:
+        return JS_NewBool(ctx, JS_VALUE_GET_BOOL(this_val));
 
-        return JS_DupValue(ctx, this_val);
+    case JS_TAG_INT:
+        return JS_NewInt32(ctx, JS_VALUE_GET_INT(this_val));
+
+    case JS_TAG_FLOAT64:
+        return JS_NewFloat64(ctx, JS_VALUE_GET_FLOAT64(this_val));
+
+    case JS_TAG_NULL:
+        return JS_NULL; // 常量，无需复制
+
+    case JS_TAG_UNDEFINED:
+        return JS_UNDEFINED; // 常量，无需复制
+
+    case JS_TAG_STRING: {
+        // 字符串：提取内容后新建，避免直接引用
+        size_t len;
+        const char *str = JS_ToCStringLen(ctx, &len, this_val);
+        if (!str) {
+            return JS_EXCEPTION;
+        }
+        JSValue ret = JS_NewStringLen(ctx, str, len);
+        JS_FreeCString(ctx, str);
+        return ret;
+    }
+
+    case JS_TAG_SYMBOL: {
+        // Symbol：提取描述后新建（创建新实例但保留描述）
+        JSValue desc_val = JS_GetPropertyStr(ctx, this_val, "description");
+        const char *desc = NULL;
+
+        if (!JS_IsUndefined(desc_val)) {
+            desc = JS_ToCString(ctx, desc_val);
+        }
+
+        // 创建新的Symbol实例（0表示普通Symbol，非全局）
+        JSValue ret = JS_NewSymbol(ctx, desc, 0);
+
+        if (desc) {
+            JS_FreeCString(ctx, desc);
+        }
+        JS_FreeValue(ctx, desc_val);
+
+        return ret;
+    }
+
+    // 对于其他基本类型（如果存在）使用默认处理
+    default:
+        if (tag <= JS_TAG_UNDEFINED) {
+            // 其他原始类型（如bigint）直接复制
+            return JS_DupValue(ctx, this_val);
+        }
+        break; // 继续处理对象类型
     }
 
     // 2. 对象类型需要递归处理
@@ -115,12 +163,14 @@ static JSValue js_json_deep_clone1(JSContext *ctx, JSValueConst this_val) {
         // 2.1 数组处理：递归复制每个元素
         if (JS_IsArray(this_val)) {
             int64_t len;
-            if (JS_GetLength(ctx, this_val, &len) < 0)
+            if (JS_GetLength(ctx, this_val, &len) < 0) {
                 return JS_EXCEPTION;
+            }
 
             JSValue new_array = JS_NewArray(ctx);
-            if (JS_IsException(new_array))
+            if (JS_IsException(new_array)) {
                 return JS_EXCEPTION;
+            }
 
             for (int64_t i = 0; i < len; i++) {
                 JSValue elem = JS_GetPropertyUint32(ctx, this_val, (uint32_t)i);
@@ -129,7 +179,7 @@ static JSValue js_json_deep_clone1(JSContext *ctx, JSValueConst this_val) {
                     return JS_EXCEPTION;
                 }
 
-                JSValue cloned_elem = js_json_deep_clone1(ctx, elem);
+                JSValue cloned_elem = js_deep_clone(ctx, elem);
                 JS_FreeValue(ctx, elem);
 
                 if (JS_IsException(cloned_elem)) {
@@ -147,12 +197,13 @@ static JSValue js_json_deep_clone1(JSContext *ctx, JSValueConst this_val) {
             return new_array;
         }
 
-        // 2.2 函数处理：函数是不可变的，直接返回引用即可
+        // 2.2 函数处理：函数不可变，直接复制引用
         if (JS_IsFunction(ctx, this_val)) {
+            // 注意：在LoongArch上如果仍有问题，可改为返回函数本身或JS_NULL
             return JS_DupValue(ctx, this_val);
         }
 
-        // 2.3 普通对象：复制所有可枚举属性（包括字符串和Symbol）
+        // 2.3 普通对象：递归复制所有可枚举属性（包括字符串和Symbol）
         JSPropertyEnum *props = NULL;
         uint32_t prop_count = 0;
 
@@ -178,7 +229,7 @@ static JSValue js_json_deep_clone1(JSContext *ctx, JSValueConst this_val) {
                 return JS_EXCEPTION;
             }
 
-            JSValue cloned_val = js_json_deep_clone1(ctx, prop_val);
+            JSValue cloned_val = js_deep_clone(ctx, prop_val);
             JS_FreeValue(ctx, prop_val);
 
             if (JS_IsException(cloned_val)) {
@@ -199,7 +250,7 @@ static JSValue js_json_deep_clone1(JSContext *ctx, JSValueConst this_val) {
         return new_obj;
     }
 
-    // 3. 其他未知类型直接复制
+    // 3. 未知类型：直接复制（应谨慎使用）
     return JS_DupValue(ctx, this_val);
 }
 
@@ -217,7 +268,8 @@ QScriptValue QScriptValueIterator::value() const
     if(1) // 深复制
     {
         JSValue v = JS_GetProperty(ctx, m_object.rawValue(), m_currentAtom);
-        auto k = js_json_deep_clone(ctx, v);
+        // auto k = js_json_deep_clone(ctx, v);
+        auto k = js_deep_clone(ctx, v);
         JS_FreeValue(ctx, v);
 
         qVal = QScriptValue(ctx, k, m_object.engine());
