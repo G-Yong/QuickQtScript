@@ -540,6 +540,10 @@ QString QScriptValue::toString() const
     }
     else
     {
+        // 假如一个对象进行JS_IsException时为true，其本身是没有携带多少有用信息的，需要通过JS_GetException才能获取到具体的信息
+        // 通过JS_GetException获取到的对象，在进行JS_IsException时反而为false，因为它是一个特殊值（或者是普通值）
+        // 我们的engine是把JS_GetException获取到的对象抛出，而返回evaluate的是原始的对象
+
         // 假如是异常，要特殊处理
         // qDebug() << "is exception";
 
