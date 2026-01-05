@@ -605,7 +605,7 @@ QScriptContext *QScriptEngine::currentContext() const
     return mCurCtx;
 }
 
-QScriptValue QScriptEngine::evaluate(const QString &program, const QString &fileName, int lineNumber, bool isModule)
+QScriptValue QScriptEngine::evaluate(const QString &program, const QString &fileName, int lineNumber)
 {
     if (!m_ctx)
         return QScriptValue();
@@ -636,6 +636,7 @@ QScriptValue QScriptEngine::evaluate(const QString &program, const QString &file
     // 使用带有flag的eval调用函数
     JSEvalOptions options;
     options.version    = JS_EVAL_OPTIONS_VERSION;
+    bool isModule = JS_DetectModule(ba.constData(), ba.size());
     options.eval_flags = isModule ? JS_EVAL_TYPE_MODULE : JS_EVAL_TYPE_GLOBAL;
     options.filename   = fn;
     options.line_num   = (lineNumber > 0) ? lineNumber : 1;
