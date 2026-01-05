@@ -493,6 +493,16 @@ QScriptEngine::QScriptEngine(QObject *parent)
     }
     JS_SetModuleLoaderFunc(m_rt, nullptr, js_module_loader_qt, this); // 传递 this
 
+    // 可以通过设置需要统计的flag，在引擎RunTime销毁的时候输出内存的使用情况
+    // {
+    //     JS_SetDumpFlags(m_rt,
+    //                       JS_DUMP_LEAKS         // 统计对象类型、字符串类型内存泄漏情况
+    //                     | JS_DUMP_ATOM_LEAKS    // 统计原子类型内存泄漏情况
+    //                     | JS_DUMP_MEM           // 统计运行时整体内存使用情况
+    //                     );                      // 检查内存泄漏
+    //     setbuf(stdout, NULL);   // 禁用输出缓冲，直接显示gc_run()的结果，可以自行决定是否开启
+    // }
+
     // 这里可以放在QScriptEngine的构造函数，或者调用接口的形式来初始化
     {
         js_std_init_handlers(m_rt);
