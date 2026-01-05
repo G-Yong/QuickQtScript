@@ -61,42 +61,6 @@ QString QScriptValueIterator::name() const
     return res;
 }
 
-// 原本的js_json_deep_clone
-// static JSValue js_json_deep_clone(JSContext *ctx, JSValueConst this_val) {
-//     int32_t tag = JS_VALUE_GET_TAG(this_val);
-
-//     // 1. 基本类型：使用JS_NewXxx创建新值，避免架构特定的内存对齐问题
-//     switch (tag) {
-//     case JS_TAG_BOOL:
-//         return JS_NewBool(ctx, JS_VALUE_GET_BOOL(this_val));
-
-//     case JS_TAG_INT:
-//         return JS_NewInt32(ctx, JS_VALUE_GET_INT(this_val));
-
-//     // 序列化
-//     JSValue str = JS_Call(ctx, stringify, json, 1, &this_val);
-//     if (JS_IsException(str)) {
-//         JS_FreeValue(ctx, str);
-//         JS_FreeValue(ctx, parse);
-//         JS_FreeValue(ctx, stringify);
-//         JS_FreeValue(ctx, json);
-//         JS_FreeValue(ctx, global);
-//         return JS_EXCEPTION;
-//     }
-
-//     // 反序列化
-//     JSValue cloned = JS_Call(ctx, parse, json, 1, &str);
-
-//     // 清理
-//     JS_FreeValue(ctx, str);
-//     JS_FreeValue(ctx, parse);
-//     JS_FreeValue(ctx, stringify);
-//     JS_FreeValue(ctx, json);
-//     JS_FreeValue(ctx, global);
-
-//     return cloned;
-// }
-
 // 深拷贝的通用规则：所有 ECMAScript 不可变类型（Primitive values），深拷贝时都应该共享引用，而非创建新实例。
 static JSValue js_deep_clone(JSContext *ctx, JSValueConst this_val) {
     int32_t tag = JS_VALUE_GET_TAG(this_val);
@@ -275,7 +239,6 @@ QScriptValue QScriptValueIterator::value() const
     {
         JSValue v = JS_GetProperty(ctx, m_object.rawValue(), m_currentAtom);
         auto k = js_deep_clone(ctx, v);
-        // auto k = js_json_deep_clone(ctx, v);
         JS_FreeValue(ctx, v);
 
         qVal = QScriptValue(ctx, k, m_object.engine());
