@@ -262,11 +262,12 @@ void MainWindow::on_pushButton_stop_clicked()
 
 QScriptValue funcWithoutData(QScriptContext *context, QScriptEngine *engine)
 {
-    // Q_UNUSED(context);
-    // Q_UNUSED(engine);
-    // qDebug() << "call without userdata";
-    // qDebug() << "argumentCount " << context->argumentCount();
-    // qDebug() << "argument 0 is " << context->argument(0).toInt32();
+    // // 故意泄漏：创建但不释放
+    // for(int i = 0; i < 5; i++) {
+    //     JSValue leaking = JS_NewString(engine->ctx(), "This string is leaked");
+    //     // 没有 JS_FreeValue(engine->m_ctx, leaking);
+    // }
+    // return QScriptValue(QString("leaked 100 strings"));
     return QScriptValue(QString("hello from funcWithoutData"));
 }
 
@@ -827,6 +828,29 @@ var student2 = new Student("Bob", 10, [78, 82, 75, 80]);
 console.log("学生1:", student1.name, "平均分:", student1.getAverage().toFixed(2), "等级:", student1.getGrade());
 console.log("学生2:", student2.name, "平均分:", student2.getAverage().toFixed(2), "等级:", student2.getGrade());
 
+// ==================== 数学函数测试 ====================
+console.log("\n===== 数学函数测试 =====");
+var sinVal = Math.sin(30 / 180 * Math.PI)
+print(sinVal) // 0.5
+
+var cosVal = Math.cos(60 / 180 * Math.PI)
+print(cosVal) // 0.5
+
+var tanVal = Math.tan(45 / 180 * Math.PI)
+print(tanVal) // 1
+
+var arcsinVal = Math.asin(1) / Math.PI * 180
+print(arcsinVal) // 90
+
+var arccosVal = Math.acos(0.5) / Math.PI * 180
+print(arccosVal) // 60
+
+var arctanVal = Math.atan(1) / Math.PI * 180
+print(arctanVal) // 45
+
+print(Math.random()) // 生成随机数
+print(Math.floor(Math.PI)) // 向下取整
+print(Math.ceil(Math.E)) // 向上取整
 // ==================== 完成测试 ====================
 console.log("\n===== 所有测试完成 =====");
 console.log("测试已全部执行完毕!");
