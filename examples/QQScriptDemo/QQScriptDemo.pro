@@ -1,7 +1,11 @@
 QT       += core gui concurrent
 
 # QT += script
+contains(QT, script){
+}else{
+#当不使用Qt自带的script时，使用自行定义的脚本
 include($$PWD/../../src/QScriptEngine/ScriptEngine.pri)
+}
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 

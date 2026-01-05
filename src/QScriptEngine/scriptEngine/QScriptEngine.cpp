@@ -503,6 +503,7 @@ QScriptEngine::QScriptEngine(QObject *parent)
         setbuf(stdout, NULL);   // 禁用输出缓冲，直接显示gc_run()的结果，可以自行决定是否开启
     }
 
+#ifdef USE_LIBC
     // 这里可以放在QScriptEngine的构造函数，或者调用接口的形式来初始化
     {
         js_std_init_handlers(m_rt);
@@ -521,6 +522,8 @@ QScriptEngine::QScriptEngine(QObject *parent)
             ;
         evaluate(str, "<sys_module_init>", 0, true);
     }
+#endif
+
 }
 
 QScriptEngine::~QScriptEngine()
@@ -641,7 +644,9 @@ QScriptValue QScriptEngine::evaluate(const QString &program, const QString &file
     // JS_SetModuleLoaderFunc(m_rt, nullptr, js_module_loader_qt, nullptr);
 
     val = JS_Eval2(m_ctx, ba.constData(), ba.size(), &options);
+#ifdef USE_LIBC
     js_std_loop(m_ctx); // 开启事件循环
+#endif
     QScriptValue qVal = QScriptValue(m_ctx, val, const_cast<QScriptEngine*>(this));
 
     // 需要通知agent

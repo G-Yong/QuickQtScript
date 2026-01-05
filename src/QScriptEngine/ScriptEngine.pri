@@ -15,22 +15,21 @@ INCLUDEPATH += $$PWD
 INCLUDEPATH += $$PWD/quickjs
 INCLUDEPATH += $$PWD/scriptEngine/include
 
-    # 注意，此处使用的是 quickjs-ng https://github.com/quickjs-ng/quickjs
-    # 而不是原版的，原版的对windows支持不好 https://github.com/bellard/quickjs
-    SOURCES += \
-        $$PWD/quickjs/cutils.c \
-        $$PWD/quickjs/dtoa.c \
-        $$PWD/quickjs/libregexp.c \
-        $$PWD/quickjs/libunicode.c \
-        $$PWD/quickjs/quickjs.c \
-        $$PWD/scriptEngine/QScriptContext.cpp \
-        $$PWD/scriptEngine/QScriptEngine.cpp \
-        $$PWD/scriptEngine/QScriptValue.cpp \
-        $$PWD/scriptEngine/QScriptValueIterator.cpp \
-        $$PWD/scriptEngine/QScriptEngineAgent.cpp \
-        $$PWD/scriptEngine/QScriptContextInfo.cpp \
-        $$PWD/scriptEngine/QScriptLibrary.cpp \
-        $$PWD/scriptEngine/QScriptSyntaxCheckResult.cpp
+# 注意，此处使用的是 quickjs-ng https://github.com/quickjs-ng/quickjs
+# 而不是原版的，原版的对windows支持不好 https://github.com/bellard/quickjs
+SOURCES += \
+    $$PWD/quickjs/cutils.c \
+    $$PWD/quickjs/dtoa.c \
+    $$PWD/quickjs/libregexp.c \
+    $$PWD/quickjs/libunicode.c \
+    $$PWD/quickjs/quickjs.c \
+    $$PWD/scriptEngine/QScriptContext.cpp \
+    $$PWD/scriptEngine/QScriptEngine.cpp \
+    $$PWD/scriptEngine/QScriptValue.cpp \
+    $$PWD/scriptEngine/QScriptValueIterator.cpp \
+    $$PWD/scriptEngine/QScriptEngineAgent.cpp \
+    $$PWD/scriptEngine/QScriptContextInfo.cpp \
+    $$PWD/scriptEngine/QScriptSyntaxCheckResult.cpp
 
 
 HEADERS += \
@@ -47,8 +46,14 @@ HEADERS += \
     $$PWD/scriptEngine/include/QScriptValueIterator.h \
     $$PWD/scriptEngine/include/QScriptEngineAgent.h \
     $$PWD/scriptEngine/include/QScriptContextInfo.h \
-    $$PWD/scriptEngine/include/QScriptLibrary.h \
     $$PWD/scriptEngine/include/QScriptSyntaxCheckResult.h
+
+# 在loongarch平台上，可能还没适配/安装GLIBC_2.27,因此，默认不使用LIBC
+# DEFINES += USE_LIBC
+contains(DEFINES, USE_LIBC){
+    SOURCES += $$PWD/scriptEngine/QScriptLibrary.cpp
+    HEADERS += $$PWD/scriptEngine/include/QScriptLibrary.h
+}
 
 # 还是直接固定使用吧。否则在window下使用mingw时，又被钻了空子
 # 先添加宏定义，如果是msvc再去掉EMSCRIPTEN，不然JS_HAVE_THREADS会被覆盖掉

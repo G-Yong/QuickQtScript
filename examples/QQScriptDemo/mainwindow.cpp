@@ -200,6 +200,7 @@ void MainWindow::on_pushButton_start_clicked()
             //          << chkRet.errorMessage();
             // return;
 
+#ifdef QUICKJS_NG
             // 配置模块属性
             QList<QScriptEngine::ModuleExport> exports;
             exports << QScriptEngine::ModuleExport("int32", 42, QScriptEngine::ModuleExport::Int32);
@@ -219,9 +220,14 @@ void MainWindow::on_pushButton_start_clicked()
                                                    engine.newFunction(funcLog, this), 1);
 
             engine.registerModule("m", exports);
+#endif
 
             QScriptValue result;
+#ifdef QUICKJS_NG
             result = engine.evaluate(scriptStr, JS_FILE_NAME, 0, true);
+#else
+            result = engine.evaluate(scriptStr, JS_FILE_NAME, 0);
+#endif
 
             if(result.isError())
             {
