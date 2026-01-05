@@ -223,11 +223,7 @@ void MainWindow::on_pushButton_start_clicked()
 #endif
 
             QScriptValue result;
-#ifdef QUICKJS_NG
-            result = engine.evaluate(scriptStr, JS_FILE_NAME, 0); // 把代码是不是模块放到evaluate里面判断
-#else
             result = engine.evaluate(scriptStr, JS_FILE_NAME, 0);
-#endif
 
             if(result.isError())
             {

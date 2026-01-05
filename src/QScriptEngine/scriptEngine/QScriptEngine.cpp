@@ -637,6 +637,8 @@ QScriptValue QScriptEngine::evaluate(const QString &program, const QString &file
     JSEvalOptions options;
     options.version    = JS_EVAL_OPTIONS_VERSION;
     bool isModule = JS_DetectModule(ba.constData(), ba.size());
+    qDebug() << "is module:" << isModule; // 在目前的工作模式下，全都是true
+    isModule = false;
     options.eval_flags = isModule ? JS_EVAL_TYPE_MODULE : JS_EVAL_TYPE_GLOBAL;
     options.filename   = fn;
     options.line_num   = (lineNumber > 0) ? lineNumber : 1;
