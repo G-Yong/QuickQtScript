@@ -113,6 +113,16 @@
           </property>
          </widget>
         </item>
+        <item>
+         <widget class="QPushButton" name="pushButton_loadAsnyc">
+          <property name="styleSheet">
+           <string notr="true">font: 12pt &quot;Microsoft YaHei UI&quot;;</string>
+          </property>
+          <property name="text">
+           <string>Load Asnyc</string>
+          </property>
+         </widget>
+        </item>
        </layout>
       </item>
       <item>

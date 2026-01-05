@@ -451,7 +451,7 @@ QString QScriptValue::toString() const
                     
                     // 如果属性值是字符串，需要添加引号
                     if (JS_IsString(propValue)) {
-                        propStr = "\"" + propStr + "\"";
+                        // propStr = "\"" + propStr + "\""; // QT中不需要
                     } else if (JS_IsUndefined(propValue)) {
                         propStr = "undefined";
                     }
@@ -483,7 +483,7 @@ QString QScriptValue::toString() const
                     
                     // 如果元素是字符串，需要添加引号
                     if (JS_IsString(element)) {
-                        elementStr = "\"" + elementStr + "\"";
+                        // elementStr = "\"" + elementStr + "\""; // QT中不需要
                     } else if (JS_IsUndefined(element)) {
                         elementStr = "undefined";
                     }
@@ -513,8 +513,8 @@ QString QScriptValue::toString() const
         }
         JSValue s = JS_ToString(m_ctx, m_value);
         //  有可能调用toString()失败;
-        //  对于symbol类型，也不能直接用toString;  // 可能需要在这里额外处理
-        //  对于object类型，也不会自动转成格式化的输出，例如：{ value: undefined, done: false } // 可能需要在这里额外处理
+        //  对于symbol类型，也不能直接用toString;
+        //  对于object类型，也不会自动转成格式化的输出，例如：{ value: undefined, done: false }
         if (JS_IsException(s))
         {
             JSValue exception = JS_GetException(m_ctx);

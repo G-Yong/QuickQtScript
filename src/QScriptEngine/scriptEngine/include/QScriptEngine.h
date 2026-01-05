@@ -62,7 +62,7 @@ public:
 
     QScriptContext *currentContext() const;
 
-    QScriptValue evaluate(const QString &program, const QString &fileName = QString(), int lineNumber = 1);
+    QScriptValue evaluate(const QString &program, const QString &fileName = QString(), int lineNumber = 1, bool isModule = false);
 
     QScriptValue globalObject() const;
     void setGlobalObject(const QScriptValue &object);

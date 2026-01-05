@@ -29,6 +29,7 @@ INCLUDEPATH += $$PWD/scriptEngine/include
         $$PWD/scriptEngine/QScriptValueIterator.cpp \
         $$PWD/scriptEngine/QScriptEngineAgent.cpp \
         $$PWD/scriptEngine/QScriptContextInfo.cpp \
+        $$PWD/scriptEngine/QScriptLibrary.cpp \
         $$PWD/scriptEngine/QScriptSyntaxCheckResult.cpp
 
 
@@ -46,13 +47,19 @@ HEADERS += \
     $$PWD/scriptEngine/include/QScriptValueIterator.h \
     $$PWD/scriptEngine/include/QScriptEngineAgent.h \
     $$PWD/scriptEngine/include/QScriptContextInfo.h \
+    $$PWD/scriptEngine/include/QScriptLibrary.h \
     $$PWD/scriptEngine/include/QScriptSyntaxCheckResult.h
 
+# 还是直接固定使用吧。否则在window下使用mingw时，又被钻了空子
+# 先添加宏定义，如果是windows再去掉EMSCRIPTEN，不然JS_HAVE_THREADS会被覆盖掉
+    DEFINES += EMSCRIPTEN
+    DEFINES += JS_HAVE_THREADS
 
 win32: {
     DEFINES += __TINYC__
     LIBS += -lws2_32 -liphlpapi
     DEFINES += WIN32_LEAN_AND_MEAN
+    DEFINES -= EMSCRIPTEN # 去掉EMSCRIPTEN
 } else {
     # 在quick.js 第52行左右有这么一段代码
        #if defined(EMSCRIPTEN) || defined(_MSC_VER)
@@ -66,8 +73,4 @@ win32: {
 
     # 添加linux系统可能用到的宏定义
     DEFINES += _GNU_SOURCE
-    # DEFINES += JS_HAVE_THREADS
 }
-
-# 还是直接固定使用吧。否则在window下使用mingw时，又被钻了空子
-    DEFINES += EMSCRIPTEN

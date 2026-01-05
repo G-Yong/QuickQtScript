@@ -149,8 +149,6 @@ void MainWindow::on_pushButton_start_clicked()
             }
             engineAgent.setDebugMode(MyScriptEngineAgent::Continue);
 
-
-
             // console
             QScriptValue console = engine.newObject();
             console.setProperty("log", engine.newFunction(funcLog, this));
@@ -202,7 +200,6 @@ void MainWindow::on_pushButton_start_clicked()
             //          << chkRet.errorMessage();
             // return;
 
-
             // 配置模块属性
             QList<QScriptEngine::ModuleExport> exports;
             exports << QScriptEngine::ModuleExport("int32", 42, QScriptEngine::ModuleExport::Int32);
@@ -224,7 +221,8 @@ void MainWindow::on_pushButton_start_clicked()
             engine.registerModule("m", exports);
 
             QScriptValue result;
-            result = engine.evaluate(scriptStr, JS_FILE_NAME);
+            result = engine.evaluate(scriptStr, JS_FILE_NAME, 0, true);
+
             if(result.isError())
             {
                 handleLog(result.toString());
@@ -367,6 +365,51 @@ var val = 0
     }
 }
 */
+)";
+}
+
+QString MainWindow::asnycCode()
+{
+    return
+R"(
+var a = [1, 2, 3]
+console.log(a)
+
+async function f() {
+  return 'hello world';
+}
+
+f().then(v => console.log(v))
+Promise.resolve().then(() => {
+  console.log('B')
+})
+console.log('A')
+
+let count = 0;
+const intervalId = setInterval(() => {
+    count++;
+    console.log(`这是第 ${count} 次输出，时间：`, new Date().toLocaleTimeString());
+
+    // 运行5次后停止
+    if (count >= 5) {
+        clearInterval(intervalId);
+        console.log('定时器已停止');
+    }
+}, 1000); // 1000毫秒 = 1秒
+
+count = 0;
+function printMessage() {
+    count++;
+    console.log(`这是第 ${count} 次输出，时间：`, new Date().toLocaleTimeString());
+
+    // 设置下一次执行
+    if (count < 5) {
+        setTimeout(printMessage, 1000);
+    } else {
+        console.log('循环结束');
+    }
+}
+printMessage()
 )";
 }
 
@@ -709,6 +752,28 @@ var car = {
 console.log("车辆信息:", car.getInfo());
 console.log("鸣笛声:", car.honk());
 
+// ==================== Class对象测试 ====================
+console.log("\n===== Class对象测试 =====");
+
+class Aclass {
+  static bar = 42;
+  static foo = { n: 100 };
+}
+
+class Bclass extends Aclass { // 通过 extends 继承
+  constructor() {
+    super();
+    Bclass.foo.n--;
+    Bclass.bar--;
+  }
+}
+
+const bObj = new Bclass();
+console.log('Bclass.foo.n = ', Bclass.foo.n) // 99
+console.log('Bclass.bar = ', Bclass.bar) // 41
+console.log('Aclass.foo.n = ', Aclass.foo.n) // 99
+console.log('Aclass.bar = ', Aclass.bar) // 42
+
 // ==================== 异常处理测试 ====================
 console.log("\n===== 异常处理测试 =====");
 
@@ -873,5 +938,9 @@ void MainWindow::on_pushButton_loadDebug_clicked()
     // 将 debugCode 加载到编辑器；用户可在加载后继续编辑，后续重置不会覆盖当前编辑内容
     codeEditor->setPlainText(debugCode());
 }
-// reset functionality removed
 
+void MainWindow::on_pushButton_loadAsnyc_clicked()
+{
+    // 将 asnycCode 加载到编辑器；用户可在加载后继续编辑，后续重置不会覆盖当前编辑内容
+    codeEditor->setPlainText(asnycCode());
+}
