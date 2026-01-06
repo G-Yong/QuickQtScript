@@ -87,6 +87,41 @@ inline JSCFunctionListEntry JS_OBJECT_DEF_CPP(const char* name, const JSCFunctio
     return entry;
 }
 
+// 根据import/export检测脚本是不是模块文件
+static bool detectModuleSyntax(const QByteArray &code)
+{
+    // 快速路径：检查是否以 import/export 开头（修剪空白后）
+    if (code.trimmed().startsWith("import ") || code.trimmed().startsWith("export ")) {
+        return true;
+    }
+
+    // 扫描多行代码中的 import/export 语句
+    const char* data = code.constData();
+    const char* end = data + code.size();
+    const char* p = data;
+
+    while (p < end) {
+        // 跳过空白字符（空格、制表符、换行符）
+        while (p < end && (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n')) {
+            p++;
+        }
+        if (p >= end) break;
+
+        // 检查是否以 "import " 或 "export " 开头
+        if ((end - p >= 7 && memcmp(p, "import ", 7) == 0) ||
+            (end - p >= 7 && memcmp(p, "export ", 7) == 0)) {
+            return true;
+        }
+
+        // 跳过当前行（查找行尾）
+        while (p < end && *p != '\n' && *p != '\r') {
+            p++;
+        }
+    }
+
+    return false;
+}
+
 // 读取本地模块加载函数
 static JSModuleDef *js_module_loader_qt(JSContext *ctx,
                                         const char *module_name,
@@ -637,8 +672,9 @@ QScriptValue QScriptEngine::evaluate(const QString &program, const QString &file
     JSEvalOptions options;
     options.version    = JS_EVAL_OPTIONS_VERSION;
     bool isModule = JS_DetectModule(ba.constData(), ba.size());
-    qDebug() << "is module:" << isModule; // 在目前的工作模式下，全都是true
-    isModule = false;
+    isModule = isModule && detectModuleSyntax(ba); // 添加module相关的关键字判断
+    // isModule = false;
+    qDebug() << "evaluate isModule: " << isModule;
     options.eval_flags = isModule ? JS_EVAL_TYPE_MODULE : JS_EVAL_TYPE_GLOBAL;
     options.filename   = fn;
     options.line_num   = (lineNumber > 0) ? lineNumber : 1;
@@ -650,6 +686,7 @@ QScriptValue QScriptEngine::evaluate(const QString &program, const QString &file
 #ifdef USE_LIBC
     js_std_loop(m_ctx); // 开启事件循环
 #endif
+
     QScriptValue qVal = QScriptValue(m_ctx, val, const_cast<QScriptEngine*>(this));
 
     // 需要通知agent
@@ -1195,7 +1232,11 @@ QScriptSyntaxCheckResult QScriptEngine::checkSyntax(const QString &program)
 
     QByteArray ba = program.toUtf8();
     const char *fn = "<check>";
-    int flags = JS_EVAL_TYPE_GLOBAL | JS_EVAL_FLAG_COMPILE_ONLY;
+    bool isModule = JS_DetectModule(ba.constData(), ba.size());
+    isModule = isModule && detectModuleSyntax(ba); // 添加module相关的关键字判断
+    // isModule = false;
+    qDebug() << "checkSyntax isModule: " << isModule;
+    int flags = (isModule ? JS_EVAL_TYPE_MODULE : JS_EVAL_TYPE_GLOBAL) | JS_EVAL_FLAG_COMPILE_ONLY;
 
     JSValue val = JS_Eval(ctx, ba.constData(), ba.size(), fn, flags);
 
@@ -1217,36 +1258,58 @@ QScriptSyntaxCheckResult QScriptEngine::checkSyntax(const QString &program)
 
     JS_FreeValue(ctx, val);
 
-    message = aVal.toString();
+    JSValue exception = JS_GetException(ctx);
 
-    // Try to parse file:line:column from message
-    QString first = message.trimmed();
-    QString inside;
-    int lp = first.lastIndexOf('(');
-    int rp = first.lastIndexOf(')');
-    if (lp != -1 && rp > lp) {
-        inside = first.mid(lp + 1, rp - lp - 1).trimmed();
-    } else {
-        if (first.contains(" at ", Qt::CaseInsensitive)) {
-            int at = first.lastIndexOf(" at ", -1, Qt::CaseInsensitive);
-            if (at >= 0)
-                inside = first.mid(at + 4).trimmed();
-        } else {
-            inside = first;
-        }
+    {
+        JSValue s = JS_ToString(ctx, exception); // 取的是 exception
+        const char *c = JS_ToCString(ctx, s);
+
+        message += QString::fromUtf8(c ? c : "");
+
+        JS_FreeCString(ctx, c);
+        JS_FreeValue(ctx, s);
     }
 
-    QStringList parts = inside.split(':');
-    if (parts.size() >= 2) {
-        bool ok1 = false;
-        bool ok2 = false;
-        column = parts.takeLast().toInt(&ok1);
-        line = parts.takeLast().toInt(&ok2);
-        if (!ok1) column = -1;
-        if (!ok2) {
-            if (ok1) { line = column; column = -1; }
-            else line = -1;
+    // 1. 获取 "stack" 对应的原子（atom），这是高效查找属性的键
+    JSAtom atom_stack = JS_NewAtom(ctx, "stack");
+
+    // 2. 从异常对象中获取 stack 属性的值
+    JSValue stack_val = JS_GetProperty(ctx, exception, atom_stack);
+
+    // 3. 检查并转换堆栈信息为C字符串
+    if (!JS_IsUndefined(stack_val)) {
+        const char *stack_str = JS_ToCString(ctx, stack_val);
+        if (stack_str) {
+            // 4. 打印错误和堆栈
+            // fprintf(stderr, "Exception occurred:\n%s\n", stack_str);
+
+            message += QString(stack_str);
+
+            JS_FreeCString(ctx, stack_str); // 释放C字符串
         }
+    } else {
+        // 如果 stack 属性不存在，打印一个提示
+        qDebug() << "Exception occurred, but no stack trace is available.\n";
+    }
+
+    // 5. 释放所有创建的 JS 值
+    JS_FreeValue(ctx, stack_val);
+    JS_FreeAtom(ctx, atom_stack); // 释放原子
+
+    JS_Throw(ctx, exception);
+
+    // qDebug() << message;
+    QString msg = message.trimmed();
+    QString fileName;
+
+    int atPos = msg.lastIndexOf(" at ");
+    if (atPos >= 0) {
+        QStringList p = msg.mid(atPos + 4).split(':');  // 解析位置
+        if (p.size() >= 2) {
+            column = p.takeLast().toInt();
+            line = p.takeLast().toInt();
+        }
+        message = msg.left(atPos).trimmed();  // 只保留前面的错误描述
     }
 
     return QScriptSyntaxCheckResult(message, line, column);
