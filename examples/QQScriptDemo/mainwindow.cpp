@@ -193,12 +193,11 @@ void MainWindow::on_pushButton_start_clicked()
             // QString scriptStr = codeEditor->toPlainText(); // 这样取得的是包含了annotation的全部文本
             QString scriptStr = codeEditor->getSourceCode(); // 这样只取得源码
 
-            // auto chkRet = engine.checkSyntax(scriptStr);
-            // qDebug() << "result:"
-            //          << chkRet.errorLineNumber()
-            //          << chkRet.errorColumnNumber()
-            //          << chkRet.errorMessage();
-            // return;
+            auto chkRet = engine.checkSyntax(scriptStr);
+            qDebug() << "result:"
+                     << chkRet.errorLineNumber()
+                     << chkRet.errorColumnNumber()
+                     << chkRet.errorMessage();
 
 #ifdef QUICKJS_NG
             // 配置模块属性
