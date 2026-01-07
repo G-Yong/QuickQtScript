@@ -28,7 +28,7 @@ JSSyntaxHighlighter::JSSyntaxHighlighter(QTextDocument *parent)
                     << "\\bof\\b" << "\\bclass\\b" << "\\bextends\\b"
                     << "\\bsuper\\b" << "\\bstatic\\b" << "\\basync\\b"
                     << "\\bawait\\b" << "\\byield\\b" << "\\bimport\\b"
-                    << "\\bexport\\b" << "\\bfrom\\b" << "\\bdefault\\b";
+                    << "\\bexport\\b" << "\\bfrom\\b" << "\\bas\\b" << "\\bdefault\\b";
 
     foreach (const QString &pattern, keywordPatterns) {
         rule.pattern = QRegularExpression(pattern);
