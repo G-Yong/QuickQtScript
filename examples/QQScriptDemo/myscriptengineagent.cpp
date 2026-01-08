@@ -270,9 +270,8 @@ void MyScriptEngineAgent::waitForContinue()
     //          << "depth=" << m_currentDepth;
 
     // 阻塞等待继续命令
-    // 定期检查 engine 是否有效，避免永久阻塞和野指针访问
-    while (m_paused && engine()) {
-        m_waitCondition.wait(&m_mutex, 50);  // 50ms 超时后重检
+    while (m_paused) {
+        m_waitCondition.wait(&m_mutex);
     }
 }
 

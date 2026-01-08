@@ -5,7 +5,6 @@
 #include <QHBoxLayout>
 #include <QtConcurrentRun>
 #include <QDateTime>
-#include <QTimer>
 #include <QScriptValueIterator>
 
 #include "codeEditor/jscodeeditor.h"
@@ -85,16 +84,10 @@ MainWindow::MainWindow(QWidget *parent)
 
 MainWindow::~MainWindow()
 {
-    if(mEngine != nullptr)
+    if(mEngine)
     {
-        if(mEngineAgent != nullptr) {
-            mEngineAgent->stopDebugging();
-            mEngine->abortEvaluation();
-        }
-        delete mEngineAgent;
-        mEngineAgent = nullptr;
-        delete mEngine;
-        mEngine = nullptr;
+        mEngineAgent->stopDebugging();
+        mEngine->abortEvaluation();
     }
     delete ui;
 }
@@ -138,50 +131,51 @@ void MainWindow::on_pushButton_start_clicked()
 
         // 启动
         auto functor = [&](){
-            // 通过成员变量指针访问，而不是局部变量
-            mEngine = new QScriptEngine();
-            mEngineAgent = new MyScriptEngineAgent(mEngine);
-            mEngine->setAgent(mEngineAgent);
+            QScriptEngine engine;
+            MyScriptEngineAgent engineAgent(&engine);
+            engine.setAgent(&engineAgent);
 
+            mEngine      = &engine;
+            mEngineAgent = &engineAgent;
             connect(mEngineAgent, &MyScriptEngineAgent::posChanged, this, [=](PosInfo info){
                 codeEditor->setCurrentExecutionLine(info.line);
             }, Qt::QueuedConnection);
 
             // 添加断点
             auto bps = mBreakPoints[JS_FILE_NAME];
-            mEngineAgent->clearBreakpoints();
+            engineAgent.clearBreakpoints();
             foreach (auto line, bps) {
-                mEngineAgent->addBreakpoint(JS_FILE_NAME, line);
+                engineAgent.addBreakpoint(JS_FILE_NAME, line);
             }
-            mEngineAgent->setDebugMode(MyScriptEngineAgent::Continue);
+            engineAgent.setDebugMode(MyScriptEngineAgent::Continue);
 
             // console
-            QScriptValue console = mEngine->newObject();
-            console.setProperty("log", mEngine->newFunction(funcLog, this));
-            mEngine->globalObject().setProperty("console", console);
+            QScriptValue console = engine.newObject();
+            console.setProperty("log", engine.newFunction(funcLog, this));
+            engine.globalObject().setProperty("console", console);
 
             // print
-            mEngine->globalObject().setProperty("print", mEngine->newFunction(funcLog, this));
+            engine.globalObject().setProperty("print", engine.newFunction(funcLog, this));
 
             // sleep
-            mEngine->globalObject().setProperty("sleep", mEngine->newFunction(funcSleep, this));
+            engine.globalObject().setProperty("sleep", engine.newFunction(funcSleep, this));
 
             // 测试带 prototype 的构造器/工厂函数
-            QScriptValue fooProto = mEngine->newObject();
-            fooProto.setProperty("whatever", mEngine->newVariant(QString("protoVal")));
-            mEngine->globalObject().setProperty("Foo", mEngine->newFunction(Foo, fooProto));
+            QScriptValue fooProto = engine.newObject();
+            fooProto.setProperty("whatever", engine.newVariant(QString("protoVal")));
+            engine.globalObject().setProperty("Foo", engine.newFunction(Foo, fooProto));
 
             // 测试自定义类型 Bar 的 defaultPrototype 与构造器（使用 QObject 原型）
             BarPrototype *barPrototypeObject = new BarPrototype();
-            QScriptValue barProto = mEngine->newQObject(barPrototypeObject);
-            mEngine->setDefaultPrototype(qMetaTypeId<Bar>(), barProto);
-            QScriptValue barCtor = mEngine->newFunction(constructBar, barProto);
+            QScriptValue barProto = engine.newQObject(barPrototypeObject);
+            engine.setDefaultPrototype(qMetaTypeId<Bar>(), barProto);
+            QScriptValue barCtor = engine.newFunction(constructBar, barProto);
             // set constructor.prototype to the prototype object
             // barCtor.setProperty("prototype", barProto);
-            mEngine->globalObject().setProperty("Bar", barCtor);
+            engine.globalObject().setProperty("Bar", barCtor);
 
             // 测试无带参函数签名注册功能
-            mEngine->globalObject().setProperty("callPure", mEngine->newFunction(funcWithoutData));
+            engine.globalObject().setProperty("callPure", engine.newFunction(funcWithoutData));
 
 
             // 测试QObject
@@ -192,14 +186,14 @@ void MainWindow::on_pushButton_start_clicked()
                 qDebug() << "对象已被销毁! 指针地址:" << obj;
                 qDebug() << "对象名:" << (obj ? obj->objectName() : "nullptr");
             });
-            auto jsQObj = mEngine->newQObject(&qObj);
-            mEngine->globalObject().setProperty("qObj", jsQObj);
+            auto jsQObj = engine.newQObject(&qObj);
+            engine.globalObject().setProperty("qObj", jsQObj);
 
 
             // QString scriptStr = codeEditor->toPlainText(); // 这样取得的是包含了annotation的全部文本
             QString scriptStr = codeEditor->getSourceCode(); // 这样只取得源码
 
-            auto chkRet = mEngine->checkSyntax(scriptStr);
+            auto chkRet = engine.checkSyntax(scriptStr);
             qDebug() << "result:"
                      << chkRet.errorLineNumber()
                      << chkRet.errorColumnNumber()
@@ -214,7 +208,7 @@ void MainWindow::on_pushButton_start_clicked()
             exports << QScriptEngine::ModuleExport("str", QString("这是模块字符串属性"), QScriptEngine::ModuleExport::String);
 
             // 嵌套对象需要特殊处理
-            QScriptValue obj = mEngine->newObject();
+            QScriptValue obj = engine.newObject();
             obj.setProperty("str", "这是对象字符串属性");
             exports << QScriptEngine::ModuleExport("obj", QVariant::fromValue(obj), QScriptEngine::ModuleExport::Object);
 
@@ -222,13 +216,13 @@ void MainWindow::on_pushButton_start_clicked()
             // 配置模块方法
             exports << QScriptEngine::ModuleExport("Print",
                                                    QScriptEngine::ModuleExport::Function,
-                                                   mEngine->newFunction(funcLog, this), 1);
+                                                   engine.newFunction(funcLog, this), 1);
 
-            mEngine->registerModule("m", exports);
+            engine.registerModule("m", exports);
 #endif
 
             QScriptValue result;
-            result = mEngine->evaluate(scriptStr, JS_FILE_NAME, 0);
+            result = engine.evaluate(scriptStr, JS_FILE_NAME, 0);
 
             if(result.isError())
             {
@@ -238,7 +232,13 @@ void MainWindow::on_pushButton_start_clicked()
             qDebug() << "script result:" << result.toString();
 
             QMetaObject::invokeMethod(this, [=](){
-                on_pushButton_stop_clicked();
+                // on_pushButton_stop_clicked();    // 脚本暂停后再点击停止，似乎会重复调用
+                ui->pushButton_start->setVisible(true);
+                ui->pushButton_stop->setVisible(false);
+                ui->pushButton_stepIn->setVisible(false);
+                ui->pushButton_stepOut->setVisible(false);
+                ui->pushButton_stepOver->setVisible(false);
+                ui->pushButton_continue->setVisible(false);
             }, Qt::QueuedConnection);
         };
         QtConcurrent::run(functor);
@@ -261,18 +261,9 @@ void MainWindow::on_pushButton_stop_clicked()
 
     if(mEngine.isNull() == false)
     {
-        if(mEngineAgent.isNull() == false) {
-            mEngineAgent->stopDebugging();
-        }
+        mEngineAgent->stopDebugging();
         std::atomic_store(&stop_flag, 1);
         mEngine->abortEvaluation();
-
-        // 异步删除：给脚本线程时间退出，QPointer 会自动置空
-        QTimer::singleShot(50, this, [this]() {
-            if (mEngine) {  // 双重检查
-                delete mEngine;  // agent 作为子对象被删除
-            }
-        });
     }
 }
 
