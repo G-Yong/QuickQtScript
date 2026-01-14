@@ -232,7 +232,13 @@ void MainWindow::on_pushButton_start_clicked()
             qDebug() << "script result:" << result.toString();
 
             QMetaObject::invokeMethod(this, [=](){
-                on_pushButton_stop_clicked();
+                // on_pushButton_stop_clicked();    // 脚本暂停后再点击停止，似乎会重复调用
+                ui->pushButton_start->setVisible(true);
+                ui->pushButton_stop->setVisible(false);
+                ui->pushButton_stepIn->setVisible(false);
+                ui->pushButton_stepOut->setVisible(false);
+                ui->pushButton_stepOver->setVisible(false);
+                ui->pushButton_continue->setVisible(false);
             }, Qt::QueuedConnection);
         };
         QtConcurrent::run(functor);
