@@ -414,15 +414,115 @@ QString QScriptValue::toString() const
 
     if(JS_IsException(m_value) == false)
     {
-        if (JS_IsObject(m_value) &&
-            !JS_IsFunction(m_ctx, m_value) &&
-            !JS_IsArray(m_value) &&
-            !JS_IsError(m_value) // error普通处理就行
-            )
-        {
-            // 处理对象，输出格式为 { prop1: value1, prop2: value2 }
-            res = "{ ";
-            
+        // Array // 输出格式为: [ val1, val2, ..., valn ]
+        if (JS_IsArray(m_value)) {
+            QString res = "[ ";
+            int64_t len = 0;
+            if (JS_GetLength(m_ctx, m_value, &len) >= 0) {
+                for (int64_t i = 0; i < len; ++i) {
+                    if (i > 0) res += ", ";
+                    JSValue element = JS_GetPropertyUint32(m_ctx, m_value, (uint32_t)i);
+                    QScriptValue v(m_ctx, element, m_engine);
+                    QString s = v.toString();
+                    if (JS_IsString(element)) s = "'" + s + "'"; // 字符串值加上引号
+                    if (JS_IsUndefined(element)) s = "undefined";
+                    res += s;
+                    JS_FreeValue(m_ctx, element);
+                }
+            }
+            return res + " ]";
+        }
+
+        // Symbol // 输出格式为: Symbol('descriptor')
+        if (JS_IsSymbol(m_value)) {
+            JSValue desc = JS_GetPropertyStr(m_ctx, m_value, "description");
+            const char *c = JS_ToCString(m_ctx, desc);
+            QString result = QString("Symbol(%1)").arg(c ? c : "");
+            JS_FreeCString(m_ctx, c);
+            JS_FreeValue(m_ctx, desc);
+            return result;
+        }
+
+        // Set/Map/WeakSet/WeakMap 集中处理
+        bool isSet = JS_IsSet(m_value); // 输出格式为: Set(n) { key1, key2, ..., keyn }
+        bool isMap = JS_IsMap(m_value); // 输出格式为: Map(n) { key1 => val1, key2 => val2, ..., keyn => valn }
+        bool isWeakSet = JS_IsWeakSet(m_value);
+        bool isWeakMap = JS_IsWeakMap(m_value);
+
+        if (isSet || isMap || isWeakSet || isWeakMap) {
+            // Weak容器不可迭代，直接返回占位符
+            if (isWeakSet) return "{ < WeakSet > }";
+            if (isWeakMap) return "{ < WeakMap > }";
+
+            // Set/Map 使用 Array.from 转换
+            JSValue global = JS_GetGlobalObject(m_ctx);
+            JSValue arrayCtor = JS_GetPropertyStr(m_ctx, global, "Array");
+            JSValue fromFn = JS_GetPropertyStr(m_ctx, arrayCtor, "from");
+
+            JSValue argv[1] = { JS_DupValue(m_ctx, m_value) };
+            JSValue arr = JS_Call(m_ctx, fromFn, arrayCtor, 1, argv);
+
+            JS_FreeValue(m_ctx, fromFn);
+            JS_FreeValue(m_ctx, arrayCtor);
+            JS_FreeValue(m_ctx, global);
+            JS_FreeValue(m_ctx, argv[0]);
+
+            if (!JS_IsException(arr) && JS_IsArray(arr)) {
+                QString res = "";
+                int64_t len = 0;
+                int64_t i = 0;
+                if (JS_GetLength(m_ctx, arr, &len) >= 0) {
+                    res += "{ ";
+                    for (i = 0; i < len; ++i) {
+                        qDebug() << i;
+                        if (i > 0) res += ", ";
+                        JSValue item = JS_GetPropertyUint32(m_ctx, arr, (uint32_t)i);
+
+                        if (isMap) {
+                            // Map条目是[key, value]数组
+                            JSValue key = JS_GetPropertyUint32(m_ctx, item, 0);
+                            JSValue val = JS_GetPropertyUint32(m_ctx, item, 1);
+
+                            QScriptValue qk(m_ctx, key, m_engine);
+                            QScriptValue qv(m_ctx, val, m_engine);
+                            QString ks = qk.toString();
+                            QString vs = qv.toString();
+
+                            // 字符串属性值加引号
+                            if (JS_IsString(val)) vs = "'" + vs + "'";
+
+                            res += ks + " => " + vs;
+                            JS_FreeValue(m_ctx, key);
+                            JS_FreeValue(m_ctx, val);
+                        } else {
+                            // Set条目是值
+                            QScriptValue qv(m_ctx, item, m_engine);
+                            QString s = qv.toString();
+                            if (JS_IsString(item)) s = "'" + s + "'"; // 字符串值加上引号
+                            if (JS_IsUndefined(item)) s = "undefined";
+                            res += s;
+                        }
+
+                        JS_FreeValue(m_ctx, item);
+                    }
+                }
+                JS_FreeValue(m_ctx, arr);
+                res += " }";
+                res = ((isSet) ? QString("Set(%1) ").arg(i) : QString("Map(%1) ").arg(i)) + res; // 开头添加类型
+                return res;
+            }
+            JS_FreeValue(m_ctx, arr);
+            return (isSet) ? "Set(0) { }" : "Map(0) { }" ;
+        }
+
+        // 普通对象（不包括函数、错误）
+        if (JS_IsObject(m_value)
+            && !JS_IsFunction(m_ctx, m_value) // 函数不特殊处理
+            && !JS_IsError(m_value) // 错误不特殊处理
+            ) {
+
+            // Object 输出格式为: { prop1: val1, prop2: val2, ..., propn: valn }
+            QString res = "{ ";
             JSPropertyEnum *props = nullptr;
             uint32_t plen = 0;
             int flags = JS_GPN_STRING_MASK;
@@ -432,89 +532,32 @@ QString QScriptValue::toString() const
                 flags = flags | JS_GPN_ENUM_ONLY;
             }
             int ret = JS_GetOwnPropertyNames(m_ctx, &props, &plen, m_value, flags);
+
             if (ret >= 0 && props) {
                 for (uint32_t i = 0; i < plen; ++i) {
-                    if (i > 0) {
-                        res += ", ";
-                    }
-                    
+                    if (i > 0) res += ", ";
+
                     JSAtom atom = props[i].atom;
                     const char *name = JS_AtomToCString(m_ctx, atom);
-                    QString key = name ? QString::fromUtf8(name) : QString();
+                    res += (name ? name : "") + QString(": ");
                     JS_FreeCString(m_ctx, name);
-                    
-                    res += key + ": ";
-                    
-                    JSValue propValue = JS_GetProperty(m_ctx, m_value, atom);
-                    QScriptValue scriptPropValue(m_ctx, propValue, m_engine);
-                    QString propStr = scriptPropValue.toString();
-                    
-                    // 如果属性值是字符串，需要添加引号
-                    if (JS_IsString(propValue)) {
-                        // propStr = "\"" + propStr + "\""; // QT中不需要
-                    } else if (JS_IsUndefined(propValue)) {
-                        propStr = "undefined";
-                    }
-                    
-                    res += propStr;
-                    JS_FreeValue(m_ctx, propValue);
+
+                    JSValue propVal = JS_GetProperty(m_ctx, m_value, atom);
+                    QScriptValue qv(m_ctx, propVal, m_engine);
+                    QString s = qv.toString();
+                    if (JS_IsString(propVal)) s = "'" + s + "'"; // 字符串值加上引号
+                    if (JS_IsUndefined(propVal)) s = "undefined";
+                    res += s;
+                    JS_FreeValue(m_ctx, propVal);
                 }
                 JS_FreePropertyEnum(m_ctx, props, plen);
             }
-            
-            res += " }";
-            return res;
+            return res + " }";
         }
-        else if (JS_IsArray(m_value))
-        {
-            // 处理数组类型，输出格式为 [value1, value2, ...]
-            res = "[ ";
-            
-            int64_t len = 0;
-            if (JS_GetLength(m_ctx, m_value, &len) >= 0) {
-                for (int64_t i = 0; i < len; ++i) {
-                    if (i > 0) {
-                        res += ", ";
-                    }
-                    
-                    JSValue element = JS_GetPropertyUint32(m_ctx, m_value, (uint32_t)i);
-                    QScriptValue scriptElement(m_ctx, element, m_engine);
-                    QString elementStr = scriptElement.toString();
-                    
-                    // 如果元素是字符串，需要添加引号
-                    if (JS_IsString(element)) {
-                        // elementStr = "\"" + elementStr + "\""; // QT中不需要
-                    } else if (JS_IsUndefined(element)) {
-                        elementStr = "undefined";
-                    }
-                    
-                    res += elementStr;
-                    JS_FreeValue(m_ctx, element);
-                }
-            }
-            
-            res += " ]";
-            return res;
-        }
-        else if (JS_IsSymbol(m_value))
-        {
-            // 处理 Symbol 类型
-            JSValue description = JS_GetPropertyStr(m_ctx, m_value, "description");
-            if (!JS_IsUndefined(description)) {
-                const char *desc = JS_ToCString(m_ctx, description);
-                QString symbolDesc = QString::fromUtf8(desc ? desc : "");
-                JS_FreeCString(m_ctx, desc);
-                JS_FreeValue(m_ctx, description);
-                return "Symbol(" + symbolDesc + ")";
-            } else {
-                JS_FreeValue(m_ctx, description);
-                return "Symbol()";
-            }
-        }
+
+
         JSValue s = JS_ToString(m_ctx, m_value);
         //  有可能调用toString()失败;
-        //  对于symbol类型，也不能直接用toString;
-        //  对于object类型，也不会自动转成格式化的输出，例如：{ value: undefined, done: false }
         if (JS_IsException(s))
         {
             JSValue exception = JS_GetException(m_ctx);
