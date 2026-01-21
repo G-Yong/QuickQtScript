@@ -122,6 +122,13 @@ private:
     mutable QVariant m_cachedVariant;
     bool m_isVariant{false};
     QVariant m_variant;
+    enum ClassId {      // 跟quickjs.c的定义保持一致
+        JS_CLASS_MAP_ITERATOR = 44,
+        JS_CLASS_SET_ITERATOR,
+        JS_CLASS_ARRAY_ITERATOR,
+        JS_CLASS_STRING_ITERATOR,
+        JS_CLASS_REGEXP_STRING_ITERATOR
+    };
 };
 
 // 添加这行宏声明，启用 Flags 的按位或运算符

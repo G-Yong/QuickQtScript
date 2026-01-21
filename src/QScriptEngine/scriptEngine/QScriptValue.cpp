@@ -519,7 +519,17 @@ QString QScriptValue::toString() const
             && !JS_IsFunction(m_ctx, m_value) // 函数不特殊处理
             && !JS_IsError(m_value) // 错误不特殊处理
             ) {
-
+            // 检查是不是迭代器类型变量
+            ClassId cid = static_cast<ClassId>(JS_GetClassID(m_value));
+            switch(cid)
+            {
+            // 目前暂时不处理迭代器类型变量，只做类型提示
+            case JS_CLASS_SET_ITERATOR: return "< SET_ITERATOR >";
+            case JS_CLASS_MAP_ITERATOR: return "< MAP_ITERATOR >";
+            case JS_CLASS_ARRAY_ITERATOR: return "< ARRAY_ITERATOR >";
+            case JS_CLASS_STRING_ITERATOR: return "< STRING_ITERATOR >";
+            case JS_CLASS_REGEXP_STRING_ITERATOR: return "< REGEXP_STRING_ITERATOR >";
+            }
             // Object 输出格式为: { prop1: val1, prop2: val2, ..., propn: valn }
             QString res = "{ ";
             JSPropertyEnum *props = nullptr;
