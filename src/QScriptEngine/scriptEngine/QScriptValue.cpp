@@ -474,7 +474,6 @@ QString QScriptValue::toString() const
                 if (JS_GetLength(m_ctx, arr, &len) >= 0) {
                     res += "{ ";
                     for (i = 0; i < len; ++i) {
-                        qDebug() << i;
                         if (i > 0) res += ", ";
                         JSValue item = JS_GetPropertyUint32(m_ctx, arr, (uint32_t)i);
 
