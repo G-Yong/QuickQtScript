@@ -514,10 +514,11 @@ QString QScriptValue::toString() const
             return (isSet) ? "Set(0) { }" : "Map(0) { }" ;
         }
 
-        // 普通对象（不包括函数、错误）
+        // 普通对象（不包括函数、错误、日期等）
         if (JS_IsObject(m_value)
             && !JS_IsFunction(m_ctx, m_value) // 函数不特殊处理
             && !JS_IsError(m_value) // 错误不特殊处理
+            && !JS_IsDate(m_value)  // 日期不特殊处理
             ) {
             // 检查是不是迭代器类型变量
             ClassId cid = static_cast<ClassId>(JS_GetClassID(m_value));

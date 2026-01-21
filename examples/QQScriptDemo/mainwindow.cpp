@@ -466,6 +466,25 @@ const mapKey1 = [1, 2, 3];
 const mapKey2 = [4, 5, 6];
 const wm2 = new WeakMap([[mapKey1, 'foo'], [mapKey2, 'bar']]);
 console.log(wm2); // { < WeakMap > }
+// ==================== Iterator测试 ====================
+console.log("\n===== Iterator测试 =====");
+var objIter = {a:1, b:'JIC', c:true}
+console.log(Object.entries(objIter))
+
+var setIter = new Set([1, 2, 3]);
+console.log(setIter.entries())
+
+var mapIter = new Map();
+mapIter.set(1, 'JIC');
+mapIter.set(2, 'PLC');
+console.log(mapIter.entries())
+
+var arrIter = ['JIC', 'PLC']
+console.log(arrIter.entries())
+
+const strIt = "A\uD835\uDC68";
+const strIter = strIt[Symbol.iterator]();
+console.log(strIter)
 // ==================== Symbol测试 ====================
 console.log("\n===== Symbol测试 =====");
 let s1 = Symbol('foo');
