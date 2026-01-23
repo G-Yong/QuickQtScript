@@ -89,7 +89,7 @@ JSSyntaxHighlighter::JSSyntaxHighlighter(QTextDocument *parent)
 
     // 正则表达式格式
     regExpressFormat.setForeground(QColor(245, 113, 37)); // 深橙色 // 要求 / 前面不能是标识符/数字/空格（排除除法场景）
-    rule.pattern = QRegularExpression(R"((?<![a-zA-Z0-9_$\s+])\s*\/(?:[^\/\\\n]|\\[^\n]|\\\[(?:\\.|[^\]\n])*\\])+\/[gimuy]*)");
+    rule.pattern = QRegularExpression(R"((?<![a-zA-Z0-9_$\s+])\s*\/(?:[^\/\\\n]|\\[^\n]|\\\[(?:\\.|[^\]\n])*\\])+\/[gisdmuy]*)");
     rule.format = regExpressFormat;
     highlightingRules.append(rule);
 }
