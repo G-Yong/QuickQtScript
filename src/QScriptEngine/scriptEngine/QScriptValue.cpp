@@ -510,7 +510,22 @@ QString QScriptValue::toString() const
                 res = ((isSet) ? QString("Set(%1) ").arg(i) : QString("Map(%1) ").arg(i)) + res; // 开头添加类型
                 return res;
             }
-            JS_FreeValue(m_ctx, arr);
+
+            if (JS_IsException(arr))
+            {
+                JSValue exception = JS_GetException(m_ctx);
+                JSValue ss = JS_ToString(m_ctx, exception);
+                const char *c = JS_ToCString(m_ctx, ss);
+                res += QString::fromUtf8(c ? c : "");
+
+                JS_FreeCString(m_ctx, c);
+                JS_FreeValue(m_ctx, ss);
+                JS_FreeValue(m_ctx, arr);
+                JS_Throw(m_ctx, exception);
+            } else {
+                JS_FreeValue(m_ctx, arr);
+            }
+
             return (isSet) ? "Set(0) { }" : "Map(0) { }" ;
         }
 
@@ -566,7 +581,7 @@ QString QScriptValue::toString() const
             return res + " }";
         }
 
-
+        // 普通的类型直接调用JS_ToString()
         JSValue s = JS_ToString(m_ctx, m_value);
         //  有可能调用toString()失败;
         if (JS_IsException(s))
