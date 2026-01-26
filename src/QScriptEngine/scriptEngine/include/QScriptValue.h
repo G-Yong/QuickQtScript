@@ -122,6 +122,9 @@ private:
     mutable QVariant m_cachedVariant;
     bool m_isVariant{false};
     QVariant m_variant;
+    // 目前toString的实现过程会进行递归调用，需要限制其递归深度
+    // 参考Node.js的运行结果，暂时将depth的默认递归深度设置为3
+    QString toStringInternal(int depth = 3) const;
     enum ClassId {      // 跟quickjs.c的定义保持一致
         JS_CLASS_MAP_ITERATOR = 44,
         JS_CLASS_SET_ITERATOR,
