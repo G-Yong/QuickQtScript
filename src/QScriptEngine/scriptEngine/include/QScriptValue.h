@@ -6,12 +6,16 @@
 #include <QVariant>
 #include <QDateTime>
 #include <QObject>
+#include <QList>
 
 extern "C" {
 #include "quickjs.h"
 }
 
 class QScriptEngine;
+class QScriptValue;
+
+typedef QList<QScriptValue> QScriptValueList;
 
 class QScriptValue
 {
@@ -63,6 +67,9 @@ public:
     QScriptEngine *engine() const;
 
     bool equals(const QScriptValue &other) const;
+
+    QScriptValue call(const QScriptValue &thisObject = QScriptValue(), const QScriptValueList &args = QScriptValueList());
+    QScriptValue call(const QScriptValue &thisObject, const QScriptValue &arguments);
 
     bool isArray() const;
     bool isBool() const;

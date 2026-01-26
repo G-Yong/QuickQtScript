@@ -6,6 +6,8 @@
 #include <QVariantMap>
 #include <QVariantList>
 
+#include <vector>
+
 extern "C" {
 #include "quickjs.h"
 }
@@ -133,6 +135,89 @@ bool QScriptValue::equals(const QScriptValue &other) const
     if (!m_ctx || !other.m_ctx)
         return false;
     return JS_IsEqual(m_ctx, m_value, other.m_value) != 0;
+}
+
+QScriptValue QScriptValue::call(const QScriptValue &thisObject, const QScriptValueList &args)
+{
+    // 如果当前值不是函数，返回无效的 QScriptValue
+    if (!m_ctx || !isFunction())
+        return QScriptValue();
+
+    // 准备 this 对象
+    JSValue thisVal = JS_UNDEFINED;
+    if (thisObject.isValid() && thisObject.isObject()) {
+        thisVal = thisObject.rawValue();
+    } else if (m_engine) {
+        // 如果 thisObject 不是对象，使用全局对象作为 this
+        thisVal = JS_GetGlobalObject(m_ctx);
+    }
+
+    // 准备参数数组
+    int argc = args.size();
+    std::vector<JSValue> argv(argc);
+    for (int i = 0; i < argc; ++i) {
+        const QScriptValue &arg = args.at(i);
+        if (arg.isVariant()) {
+            argv[i] = toJSValue(m_ctx, arg.data());
+        } else if (arg.isValid()) {
+            argv[i] = JS_DupValue(m_ctx, arg.rawValue());
+        } else {
+            argv[i] = JS_UNDEFINED;
+        }
+    }
+
+    // 调用函数
+    JSValue result = JS_Call(m_ctx, m_value, thisVal, argc, argc > 0 ? argv.data() : nullptr);
+
+    // 释放参数（由 JS_Call 复制，这里需要释放我们创建的副本）
+    for (int i = 0; i < argc; ++i) {
+        JS_FreeValue(m_ctx, argv[i]);
+    }
+
+    // 如果使用了全局对象作为 this，需要释放
+    if (!(thisObject.isValid() && thisObject.isObject()) && m_engine) {
+        JS_FreeValue(m_ctx, thisVal);
+    }
+
+    // 包装结果并返回
+    QScriptValue qResult(m_ctx, result, m_engine);
+    JS_FreeValue(m_ctx, result);
+    return qResult;
+}
+
+QScriptValue QScriptValue::call(const QScriptValue &thisObject, const QScriptValue &arguments)
+{
+    // 如果当前值不是函数，返回无效的 QScriptValue
+    if (!m_ctx || !isFunction())
+        return QScriptValue();
+
+    // 将 arguments 转换为参数列表
+    QScriptValueList args;
+
+    // arguments 可以是 arguments 对象、数组、null 或 undefined
+    if (arguments.isNull() || arguments.isUndefined() || !arguments.isValid()) {
+        // 无参数调用
+    } else if (arguments.isArray()) {
+        // 从数组中提取参数
+        int64_t len = 0;
+        if (JS_GetLength(m_ctx, arguments.rawValue(), &len) >= 0) {
+            for (int64_t i = 0; i < len; ++i) {
+                args.append(arguments.property((quint32)i));
+            }
+        }
+    } else if (arguments.isObject()) {
+        // 可能是 arguments 对象，尝试读取 length 属性
+        QScriptValue lengthVal = arguments.property("length");
+        if (lengthVal.isNumber()) {
+            int len = lengthVal.toInt32();
+            for (int i = 0; i < len; ++i) {
+                args.append(arguments.property((quint32)i));
+            }
+        }
+    }
+
+    // 调用带参数列表的 call 重载
+    return call(thisObject, args);
 }
 
 bool QScriptValue::isArray() const { return m_ctx && JS_IsArray(m_value); }
