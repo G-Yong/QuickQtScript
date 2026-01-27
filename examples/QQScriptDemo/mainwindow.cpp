@@ -446,6 +446,45 @@ console.log(m.double)
 console.log(m.str)
 console.log(m.obj.str) // 通过模块前缀来访问对象
 console.log(m.obj)
+// ==================== Set/Map测试 ====================
+console.log("\n===== Set/Map测试 =====");
+var set = new Set([1, '2', 1]);
+console.log(set);
+
+var map = new Map([
+    [1, "one"],
+    [2, "two"],
+    [1, "uno"]
+]);
+console.log(map);
+
+const setData = [[1, 2], [3, 4]];
+const ws = new WeakSet(setData);
+console.log(ws);	// { < WeakSet > }
+
+const mapKey1 = [1, 2, 3];
+const mapKey2 = [4, 5, 6];
+const wm2 = new WeakMap([[mapKey1, 'foo'], [mapKey2, 'bar']]);
+console.log(wm2); // { < WeakMap > }
+// ==================== Iterator测试 ====================
+console.log("\n===== Iterator测试 =====");
+var objIter = {a:1, b:'JIC', c:true}
+console.log(Object.entries(objIter))
+
+var setIter = new Set([1, 2, 3]);
+console.log(setIter.entries())
+
+var mapIter = new Map();
+mapIter.set(1, 'JIC');
+mapIter.set(2, 'PLC');
+console.log(mapIter.entries())
+
+var arrIter = ['JIC', 'PLC']
+console.log(arrIter.entries())
+
+const strIt = "A\uD835\uDC68";
+const strIter = strIt[Symbol.iterator]();
+console.log(strIter)
 // ==================== Symbol测试 ====================
 console.log("\n===== Symbol测试 =====");
 let s1 = Symbol('foo');
