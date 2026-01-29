@@ -817,7 +817,8 @@ QVariant QScriptValue::toVariant() const
         return JSValueToQVariant(m_ctx, m_value, m_engine, 8);
     }
 
-    return QVariant();
+    // 假如前面都不符合，就返回字符串形式
+    return QVariant(toString());
 }
 
 QObject *QScriptValue::toQObject() const
@@ -1038,7 +1039,19 @@ static QVariant JSValueToQVariant(JSContext *ctx, JSValueConst val, QScriptEngin
         return QVariant(map);
     }
 
-    return QVariant();
+    // 假如前面都不符合，那利用原生的JS_ToString返回字符串形式
+    QString info;
+    {
+        JSValue s = JS_ToString(ctx, val);
+        const char *c = JS_ToCString(ctx, s);
+
+        info = QString::fromUtf8(c ? c : "");
+
+        JS_FreeCString(ctx, c);
+        JS_FreeValue(ctx, s);
+    }
+
+    return QVariant(info);
 }
 
 quint16 QScriptValue::toUInt16() const
