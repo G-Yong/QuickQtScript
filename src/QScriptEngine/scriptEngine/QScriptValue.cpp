@@ -798,26 +798,19 @@ QVariant QScriptValue::toVariant() const
     if (m_isVariant)
         return m_variant;
 
-    if (isString())
+    // 特殊类型，QVariant无法存储，返回字符串形式
+    if(JS_IsSymbol(m_value) ||
+        JS_IsSet(m_value) ||
+        JS_IsMap(m_value) ||
+        JS_IsWeakSet(m_value) ||
+        JS_IsWeakMap(m_value)
+        )
+    {
         return QVariant(toString());
-    if (isBool())
-        return QVariant(toBool());
-    if (isNumber())
-        return QVariant((double)toNumber());
-
-    if(isObject())
-    {
-        // convert object to QVariant via helper
-        return JSValueToQVariant(m_ctx, m_value, m_engine, 8);
     }
 
-    if(isArray())
-    {
-        // arrays are handled by JSValueToQVariant as well
-        return JSValueToQVariant(m_ctx, m_value, m_engine, 8);
-    }
-
-    return QVariant();
+    // convert object to QVariant via helper
+    return JSValueToQVariant(m_ctx, m_value, m_engine, 8);
 }
 
 QObject *QScriptValue::toQObject() const
@@ -898,7 +891,23 @@ static QVariant JSValueToQVariant(JSContext *ctx, JSValueConst val, QScriptEngin
         QString str = QString::fromUtf8(c ? c : "");
         JS_FreeCString(ctx, c);
         JS_FreeValue(ctx, s);
-        return QVariant(QDateTime::fromString(str, Qt::ISODate));
+
+        // 有好几种日期格式，尝试解析
+        QDateTime dt = QDateTime::fromString(str, Qt::ISODate);
+        if(dt.isValid() == false)
+        {
+            dt = QDateTime::fromString(str, Qt::RFC2822Date);
+        }
+        if(dt.isValid() == false)
+        {
+            dt = QDateTime::fromString(str, Qt::SystemLocaleDate);
+        }
+        if(dt.isValid() == false)
+        {
+            dt = QDateTime::fromString(str, Qt::TextDate);
+        }
+
+        return QVariant(dt);
     }
 
     // If this object wraps a QObject, return it as a QVariant (QObject*)
@@ -1038,7 +1047,19 @@ static QVariant JSValueToQVariant(JSContext *ctx, JSValueConst val, QScriptEngin
         return QVariant(map);
     }
 
-    return QVariant();
+    // 假如前面都不符合，那利用原生的JS_ToString返回字符串形式
+    QString info;
+    {
+        JSValue s = JS_ToString(ctx, val);
+        const char *c = JS_ToCString(ctx, s);
+
+        info = QString::fromUtf8(c ? c : "");
+
+        JS_FreeCString(ctx, c);
+        JS_FreeValue(ctx, s);
+    }
+
+    return QVariant(info);
 }
 
 quint16 QScriptValue::toUInt16() const
