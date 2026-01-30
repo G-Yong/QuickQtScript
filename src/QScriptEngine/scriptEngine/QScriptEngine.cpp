@@ -87,39 +87,181 @@ inline JSCFunctionListEntry JS_OBJECT_DEF_CPP(const char* name, const JSCFunctio
     return entry;
 }
 
-// 根据import/export检测脚本是不是模块文件
+// 辅助函数：跳过空白和注释
+static const char* skipWhitespaceAndComments(const char* p, const char* end) {
+    while (p < end) {
+        if (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') {
+            p++; // 跳过空白
+        } else if (p + 1 < end && *p == '/' && *(p + 1) == '/') {
+            p += 2; // 跳过 //
+            while (p < end && *p != '\n' && *p != '\r') p++; // 跳过到行尾
+        } else if (p + 1 < end && *p == '/' && *(p + 1) == '*') {
+            p += 2; // 跳过 /*
+            while (p + 1 < end && !(*p == '*' && *(p + 1) == '/')) p++; // 寻找 */
+            if (p + 1 < end) p += 2; // 跳过 */
+        } else {
+            break;
+        }
+    }
+    return p;
+}
+
+// 辅助函数：安全匹配关键字
+static bool matchKeyword(const char* p, const char* end, const char* keyword) {
+    size_t len = strlen(keyword);
+    if (end - p < static_cast<size_t>(len)) return false;
+    return memcmp(p, keyword, len) == 0;
+}
+
+// 辅助函数：跳到下一行
+static const char* skipToNextLine(const char* p, const char* end) {
+    while (p < end && *p != '\n' && *p != '\r') p++;
+    while (p < end && (*p == '\n' || *p == '\r')) p++;
+    return p;
+}
+
+// 判断脚本要不要以MODULE方式执行
 static bool detectModuleSyntax(const QByteArray &code)
 {
-    // 快速路径：检查是否以 import/export 开头（修剪空白后）
-    if (code.trimmed().startsWith("import ") || code.trimmed().startsWith("export ")) {
-        return true;
-    }
-
-    // 扫描多行代码中的 import/export 语句
-    const char* data = code.constData();
-    const char* end = data + code.size();
-    const char* p = data;
+    const char* p = code.constData();
+    const char* end = p + code.size();
 
     while (p < end) {
-        // 跳过空白字符（空格、制表符、换行符）
-        while (p < end && (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n')) {
-            p++;
-        }
+        // 1. 跳过所有空白和注释
+        p = skipWhitespaceAndComments(p, end);
         if (p >= end) break;
 
-        // 检查是否以 "import " 或 "export " 开头
-        if ((end - p >= 7 && memcmp(p, "import ", 7) == 0) ||
-            (end - p >= 7 && memcmp(p, "export ", 7) == 0)) {
+        // 2. 检查 export
+        if (matchKeyword(p, end, "export")) {
+            return true; // export 后面不管是什么都是模块
+        }
+
+        // 3. 检查 import
+        if (matchKeyword(p, end, "import")) {
+            p += 6; // 跳过 "import" 关键字
+            p = skipWhitespaceAndComments(p, end);
+
+            // 判断是动态还是静态导入
+            if (p < end && *p == '(') {
+                // import(...) → 动态导入，返回官方的模块检测结果
+                return JS_DetectModule(code.constData(), code.size()) != 0;
+            }
+            // import xxx → 静态导入
             return true;
         }
 
-        // 跳过当前行（查找行尾）
-        while (p < end && *p != '\n' && *p != '\r') {
-            p++;
+#ifdef USE_LIBC
+        // 5. 检查 await
+        if (matchKeyword(p, end, "await")) {
+            return JS_DetectModule(code.constData(), code.size()) != 0; // 有await则返回 JS_DetectModule的结果
+        }
+#endif
+        // 6. 跳过当前行或语句块
+        p = skipToNextLine(p, end);
+    }
+    return false;
+}
+
+// 异步处理回调函数
+void QScriptEngine::promiseRejectionTracker(JSContext *ctx, JSValueConst promise,
+                             JSValueConst reason,
+                             bool is_handled, void *opaque)
+{
+    Q_UNUSED(promise);
+    QScriptEngine *engine = static_cast<QScriptEngine*>(opaque);
+
+    if (!is_handled) {
+        // 只有当没有 .catch() 时才记录为未捕获
+        // 记录对应的 reason 对象，便于 later 被 .catch() 标记为已处理时移除
+        engine->m_uncaughtPromiseRejections.append(
+            QScriptValue(ctx, reason, engine)
+        );
+        qDebug() << "Uncaught Promise rejection (promise stored)"
+                 << engine->m_uncaughtPromiseRejections.last().toString();
+    } else {
+        // 当 is_handled 为 true 时，应从未捕获列表中移除对应的 reason
+        for (int i = engine->m_uncaughtPromiseRejections.size() - 1; i >= 0; --i) {
+            const QScriptValue &entry = engine->m_uncaughtPromiseRejections.at(i);
+            if (JS_IsSameValue(ctx, entry.rawValue(), reason)) {
+                engine->m_uncaughtPromiseRejections.removeAt(i);
+                qDebug() << "Promise rejection was handled by .catch(), removed from tracker";
+                break;
+            }
         }
     }
+}
 
-    return false;
+// 自定义创建上下文函数
+static JSContext *JS_NewCustomContext(JSRuntime *rt)
+{
+    JSContext *ctx;
+    ctx = JS_NewContext(rt);
+    if (!ctx)
+        return NULL;
+    js_std_init_handlers(rt);
+    js_init_module_std(ctx, "std");
+    js_init_module_os(ctx, "os");
+    js_init_module_bjson(ctx, "bjson");
+
+    /* 这里可以添加其他的创建上下文时的初始化操作 */
+
+    return ctx;
+}
+
+// 去掉QScriptEngine相关的内容
+// 该函数用于编译过程中的语法检测
+// 如果要检测模块，注意模块导入的路径
+static JSModuleDef *js_module_loader_check(JSContext *ctx,
+                                        const char *module_name,
+                                        void *opaque)
+{
+    QString moduleName(module_name);
+    // 默认路径为main.cpp的目录
+    /* 注意此处的模块路径，因为有可能编模块译检测和引擎执行的文件位置不一致 */
+    moduleName = "../../" + moduleName;
+    // 处理文件路径
+    QString filename = QDir::current().filePath(moduleName);
+
+    // 检查文件是否存在
+    QFileInfo fileInfo(filename);
+    if (!fileInfo.exists()) {
+        qDebug() << "Module file not found:" << fileInfo.absoluteFilePath();
+        JS_ThrowReferenceError(ctx, "Cannot find module: %s", module_name);
+        return nullptr;
+    }
+
+    // 获取绝对路径
+    QString absolutePath = fileInfo.absoluteFilePath();
+    // qDebug() << "Absolute path:" << absolutePath;
+
+    // 使用 QFile 读取文件
+    QFile file(absolutePath);
+    if (!file.open(QIODevice::ReadOnly)) {
+        qDebug() << "Failed to open file:" << absolutePath;
+        JS_ThrowReferenceError(ctx, "Cannot open module: %s", module_name);
+        return nullptr;
+    }
+
+    QByteArray content = file.readAll();
+    file.close();
+
+    // 编译并执行模块
+    JSValue val = JS_Eval(ctx,
+                          content.constData(),
+                          content.size(),
+                          module_name,
+                          JS_EVAL_TYPE_MODULE | JS_EVAL_FLAG_COMPILE_ONLY);
+
+    if (JS_IsException(val)) {
+        qDebug() << "模块存在语法错误！！";
+        return nullptr;
+    }
+
+    // 获取并返回模块对象
+    JSModuleDef *m = static_cast<JSModuleDef *>JS_VALUE_GET_PTR(val);
+
+    JS_FreeValue(ctx, val);
+    return m;
 }
 
 // 读取本地模块加载函数
@@ -130,6 +272,15 @@ static JSModuleDef *js_module_loader_qt(JSContext *ctx,
     if (!engine) return nullptr;
 
     QString moduleName(module_name);
+
+    // 检查模块缓存：如果有，则引用计数加1
+    auto it = engine->m_loadedModules.find(moduleName);
+    if (it != engine->m_loadedModules.end()) {
+        // 模块已加载，直接返回（增加引用计数）
+        JSModuleDef *m = it.value();
+        JS_DupValue(ctx, JS_MKPTR(JS_TAG_MODULE, m));
+        return m;
+    }
 
     // 检查是否是已注册的 C++ 模块
     if (engine->m_moduleRegistry.contains(moduleName)) {
@@ -199,7 +350,8 @@ static JSModuleDef *js_module_loader_qt(JSContext *ctx,
         if (!entries.empty()) {
             JS_AddModuleExportList(ctx, m, entries.data(), entries.size());
         }
-
+        //  添加到缓存
+        engine->m_loadedModules.insert(moduleName, m);
         return m;
     }
 
@@ -211,14 +363,14 @@ static JSModuleDef *js_module_loader_qt(JSContext *ctx,
     // 检查文件是否存在
     QFileInfo fileInfo(filename);
     if (!fileInfo.exists()) {
-        qDebug() << "Module file not found:" << filename;
+        qDebug() << "Module file not found:" << fileInfo.absoluteFilePath();
         JS_ThrowReferenceError(ctx, "Cannot find module: %s", module_name);
         return nullptr;
     }
 
     // 获取绝对路径
     QString absolutePath = fileInfo.absoluteFilePath();
-    qDebug() << "Absolute path:" << absolutePath;
+    // qDebug() << "Absolute path:" << absolutePath;
 
     // 使用 QFile 读取文件
     QFile file(absolutePath);
@@ -245,6 +397,9 @@ static JSModuleDef *js_module_loader_qt(JSContext *ctx,
 
     // 获取并返回模块对象
     JSModuleDef *m = static_cast<JSModuleDef *>JS_VALUE_GET_PTR(val);
+    //  添加到缓存
+    engine->m_loadedModules.insert(moduleName, m);
+
     JS_FreeValue(ctx, val);
     return m;
 }
@@ -479,9 +634,14 @@ QScriptEngine::QScriptEngine(QObject *parent)
     // JS_SetMemoryLimit(m_rt, 0);
     // JS_SetMaxStackSize(m_rt, 0);
     // JS_SetGCThreshold(m_rt, -1);
-
-
+#ifdef USE_LIBC
+    js_std_set_worker_new_context_func(JS_NewCustomContext);
+    js_std_init_handlers(m_rt);
+    m_ctx = JS_NewCustomContext(m_rt);
+#else
     m_ctx = JS_NewContext(m_rt);
+#endif
+
     if(!m_ctx)
     {
         qCritical() << "create js context fail";
@@ -537,26 +697,29 @@ QScriptEngine::QScriptEngine(QObject *parent)
                         );                      // 检查内存泄漏
         setbuf(stdout, NULL);   // 禁用输出缓冲，直接显示gc_run()的结果，可以自行决定是否开启
     }
-
 #ifdef USE_LIBC
     // 这里可以放在QScriptEngine的构造函数，或者调用接口的形式来初始化
+    // 设置reject的回调函数为官方函数
+    JS_SetHostPromiseRejectionTracker(m_rt, js_std_promise_rejection_tracker, NULL);
     {
-        js_std_init_handlers(m_rt);
-        js_init_module_std(m_ctx, "std");
-        js_init_module_os(m_ctx, "os");
-
         // globalThis.xx = ... 等价于 engine.globalObject().setProperty("xx", ...)
         const char *str =
+            "import * as bjson from 'bjson';\n"
             "import * as std from 'std';\n"
             "import * as os from 'os';\n"
+            "globalThis.bjson = bjson;\n"
             "globalThis.std = std;\n"
             "globalThis.os = os;\n"
             "globalThis.setInterval = os.setInterval;\n"
             "globalThis.clearInterval = os.clearInterval;\n"
             "globalThis.setTimeout = os.setTimeout;\n"
             ;
-        evaluate(str, "<sys_module_init>", 0, true);
+        // evaluate(str, "<sys_module_init>", 0, true);
+        evaluate(str, "<sys_module_init>", 0);
     }
+#else
+    // 设置reject的回调函数为自定义函数
+    JS_SetHostPromiseRejectionTracker(m_rt, promiseRejectionTracker, this);
 #endif
 
 }
@@ -564,6 +727,7 @@ QScriptEngine::QScriptEngine(QObject *parent)
 QScriptEngine::~QScriptEngine()
 {
     clearDefaultPrototypes(); // 首先清空存储的默认类型，不然会崩溃
+    clearUncaughtPromiseRejections(); // 清除未处理的reject
     
     if(agent() != nullptr)
     {
@@ -575,6 +739,7 @@ QScriptEngine::~QScriptEngine()
 
     // 清理模块系统
     m_moduleRegistry.clear();
+    m_loadedModules.clear(); // 清空缓存（QuickJS 会自动释放模块）
     JS_SetModuleLoaderFunc(m_rt, nullptr, nullptr, nullptr);
     JS_SetInterruptHandler(m_rt, nullptr, nullptr);
     
@@ -589,6 +754,10 @@ QScriptEngine::~QScriptEngine()
         delete mGlobalObject;
         mGlobalObject = nullptr;
     }
+
+#ifdef USE_LIBC
+    js_std_free_handlers(m_rt);
+#endif
 
     if (m_ctx) {
         // clear context opaque to avoid dangling pointer
@@ -662,6 +831,7 @@ QScriptValue QScriptEngine::evaluate(const QString &program, const QString &file
 
     // 中断标志位复位
     std::atomic_store(&interrupt_flag, 0);
+    clearUncaughtPromiseRejections(); // 清除未处理的reject
 
     QByteArray ba   = program.toUtf8();
     QByteArray fnba = fileName.toUtf8();
@@ -671,9 +841,9 @@ QScriptValue QScriptEngine::evaluate(const QString &program, const QString &file
     // 使用带有flag的eval调用函数
     JSEvalOptions options;
     options.version    = JS_EVAL_OPTIONS_VERSION;
-    bool isModule = JS_DetectModule(ba.constData(), ba.size());
-    isModule = isModule && detectModuleSyntax(ba); // 添加module相关的关键字判断
-    // isModule = false;
+    bool isModule;
+    // isModule = JS_DetectModule(ba.constData(), ba.size()); // 等待官方完善 JS_DetectModule
+    isModule = detectModuleSyntax(ba);  // 根据 import/export/await 检测模块语法
     qDebug() << "evaluate isModule: " << isModule;
     options.eval_flags = isModule ? JS_EVAL_TYPE_MODULE : JS_EVAL_TYPE_GLOBAL;
     options.filename   = fn;
@@ -683,9 +853,59 @@ QScriptValue QScriptEngine::evaluate(const QString &program, const QString &file
     // JS_SetModuleLoaderFunc(m_rt, nullptr, js_module_loader_qt, nullptr);
 
     val = JS_Eval2(m_ctx, ba.constData(), ba.size(), &options);
-#ifdef USE_LIBC
-    js_std_loop(m_ctx); // 开启事件循环
-#endif
+    // 如果是JS_EVAL_TYPE_GLOBAL执行脚本, 发生错误时val会直接返回异常，所以不会进入下面的判断
+//     if (!JS_IsException(val))
+//     {
+// #ifdef USE_LIBC
+//         val = js_std_await(m_ctx, val);
+// #else
+//     // 如果使用JS_EVAL_TYPE_MODULE执行脚本，模块内部发生的reject错误，需要通过js_std_promise_rejection_check函数来处理
+//     // 如果使用JS_EVAL_TYPE_GLOBAL执行脚本，发生的异步reject错误，可以通过Promise的方法获取。
+//     // 但是这样的处理只能得到最后一个reject的错误
+//         JSValue obj = val;
+//         int state = JS_PromiseState(m_ctx, obj);
+//         // 如果是JS_EVAL_TYPE_MODULE执行, state是JS_PROMISE_FULFILLED
+//         // 强行使用JS_Throw获取的到的值是 undefined/uninitialized
+//         if (state == JS_PROMISE_REJECTED) {
+//             val = JS_Throw(m_ctx, JS_PromiseResult(m_ctx, obj));
+//             JS_FreeValue(m_ctx, obj);
+//         }
+// #endif
+//     }
+
+    // 无论哪种模式，先清空微任务队列，确保 Promise 状态已更新
+    if (!JS_IsException(val)) {
+        JSContext *ctx1;
+        int ret;
+        do {
+            ret = JS_ExecutePendingJob(m_rt, &ctx1);
+            if (ret < 0) {
+                break; // 错误已记录，跳出避免死循环
+            }
+        } while (ret > 0);
+    }
+    // 统一处理 Promise
+    if (!JS_IsException(val) && JS_IsObject(val))
+    {
+        int is_promise = JS_IsPromise(val);
+        if (is_promise > 0) {
+            int state = JS_PromiseState(m_ctx, val);
+            const char* stateStr = (state == JS_PROMISE_PENDING) ? "PENDING" :
+                                       (state == JS_PROMISE_FULFILLED) ? "FULFILLED" : "REJECTED";
+            qDebug() << "Script returned a Promise, state:" << stateStr;
+
+            // // 清空之前的 rejections
+            // clearUncaughtPromiseRejections();
+
+            val = awaitPromise(val, isModule);
+
+            // 检查是否有未捕获的 rejections
+            if (hasUncaughtPromiseRejections()) {
+                qDebug() << "Found" << m_uncaughtPromiseRejections.size()
+                << "uncaught promise rejections";
+            }
+        }
+    }
 
     QScriptValue qVal = QScriptValue(m_ctx, val, const_cast<QScriptEngine*>(this));
 
@@ -719,6 +939,29 @@ QScriptValue QScriptEngine::evaluate(const QString &program, const QString &file
         agent()->checkFunctionPair(scriptId, qVal);
     }
 
+#ifdef USE_LIBC
+    // js_std_loop(m_ctx);
+    if (!JS_IsException(val) && !hasUncaughtException()) { // 已经有同步错误就不进入事件循环
+        if(js_std_loop(m_ctx))
+        {
+            if (std::atomic_load(&interrupt_flag) == 0)
+            {
+                JSValue exception = JS_GetException(m_ctx);
+                if (!JS_IsUndefined(exception)) {
+                    JS_Throw(m_ctx, exception);
+                    qVal = QScriptValue(m_ctx, exception, this);
+                    if(agent() != nullptr)
+                    {
+                        agent()->exceptionThrow(scriptId, qVal, false);
+                    }
+                } else {
+                    // 可能来自异步未处理的异常，需要手动构造错误
+                    currentContext()->throwError(QScriptContext::TypeError, "Uncaught exception in async callback");
+                }
+            }
+        }
+    }
+#endif
     JS_FreeValue(m_ctx, val);
 
     return qVal;
@@ -1044,6 +1287,11 @@ void QScriptEngine::clearDefaultPrototypes()
     m_defaultPrototypes.clear();
 }
 
+QList<QScriptValue> QScriptEngine::uncaughtPromiseRejections() const
+{
+    return m_uncaughtPromiseRejections;
+}
+
 QScriptValue QScriptEngine::registerNativeFunction(FunctionWithArgSignature signature,
                                                    void *arg,
                                                    int length,
@@ -1071,6 +1319,73 @@ QScriptValue QScriptEngine::registerNativeFunction(FunctionWithArgSignature sign
     m_nativeFunctions.push_back(e);
 
     return qVal;
+}
+
+void QScriptEngine::clearUncaughtPromiseRejections()
+{
+    m_uncaughtPromiseRejections.clear();
+}
+
+JSValue QScriptEngine::awaitPromise(JSValue promise, bool isModule)
+{
+    int state = JS_PromiseState(m_ctx, promise);
+
+#ifdef USE_LIBC
+    if (isModule)
+        return js_std_await(m_ctx, promise);
+    else
+        return promise;
+#else
+    // 非libc模式：必须清空整个job队列
+    while (state == JS_PROMISE_PENDING) {
+        if (std::atomic_load(&interrupt_flag)) {
+            JS_FreeValue(m_ctx, promise);
+            return JS_ThrowTypeError(m_ctx, "Evaluation interrupted");
+        }
+
+        // 执行所有 pending jobs，直到队列为空
+        JSContext *ctx1;
+        int ret;
+        do {
+            ret = JS_ExecutePendingJob(m_rt, &ctx1);
+            if (ret <= 0) {
+                // Job执行出错，已经通过tracker记录
+                break;
+            }
+        } while (ret > 0);  // 持续执行直到无job
+
+        state = JS_PromiseState(m_ctx, promise);
+    }
+
+    if (state == JS_PROMISE_REJECTED) {
+        JSValue reason = JS_PromiseResult(m_ctx, promise);
+
+        // 检查当前 reason 是否在未捕获列表中
+        bool isCurrentPromiseUncaught = false;
+        for (int i = 0; i < m_uncaughtPromiseRejections.size(); ++i) {
+            if (JS_IsSameValue(m_ctx, m_uncaughtPromiseRejections.at(i).rawValue(), reason)) {
+                isCurrentPromiseUncaught = true;
+                break;
+            }
+        }
+
+        if (!isCurrentPromiseUncaught) {
+            // Promise 已被 .catch() 处理，返回其结果（通常为 undefined）
+            JSValue result = JS_PromiseResult(m_ctx, promise);
+            JS_FreeValue(m_ctx, promise);
+            return result;
+        }
+
+        // 未被捕获，抛出错误
+        JS_FreeValue(m_ctx, promise);
+        return JS_Throw(m_ctx, reason);
+    }
+
+    // FULFILLED: 返回结果值
+    JSValue result = JS_PromiseResult(m_ctx, promise);
+    JS_FreeValue(m_ctx, promise);
+    return result;
+#endif
 }
 
 bool QScriptEngine::getNativeEntry(int idx,
@@ -1109,56 +1424,57 @@ int QScriptEngine::moduleInitCallback(JSContext *ctx, JSModuleDef *m) {
     JS_FreeCString(ctx, nameCStr);
     JS_FreeAtom(ctx, nameAtom);
 
-    // 获取导出列表
-    auto exports = engine->m_moduleRegistry.value(moduleName);
+    // 检查是否已初始化（防止重复初始化）
+    if (engine->m_loadedModules.contains(moduleName)) {
+        // 模块已在加载器阶段缓存，此处只需设置导出值
+        auto exports = engine->m_moduleRegistry.value(moduleName);
 
-    // 现在可以安全地设置导出值（var_ref 已存在）
-    for (const auto &exp : exports) {
-        JSAtom atom = JS_NewAtom(ctx,exp.nameUtf8.constData());
-        JSValue val = JS_UNDEFINED;
+        for (const auto &exp : exports) {
+            JSAtom atom = JS_NewAtom(ctx,exp.nameUtf8.constData());
+            JSValue val = JS_UNDEFINED;
 
-        // 根据类型创建 JSValue
-        switch (exp.type) {
-        case ModuleExport::Int32:
-            val = JS_NewInt32(ctx, exp.value.toInt());
-            break;
-        case ModuleExport::Int64:
-            val = JS_NewInt64(ctx, exp.value.toLongLong());
-            break;
-        case ModuleExport::Double:
-            val = JS_NewFloat64(ctx, exp.value.toDouble());
-            break;
-        case ModuleExport::String:
-            val = JS_NewStringLen(ctx, exp.value.toString().toUtf8().constData(), exp.value.toString().toUtf8().size());
-            break;
-        case ModuleExport::Object:
-            // 处理嵌套对象（如 QObject）
-            if (exp.value.userType() == qMetaTypeId<QScriptValue>()) {
-                QScriptValue sv = exp.value.value<QScriptValue>();
-                val = JS_DupValue(ctx, sv.rawValue());
-            } else {
-                val = JS_NewObject(ctx); // 空对象占位
+            // 根据类型创建 JSValue
+            switch (exp.type) {
+            case ModuleExport::Int32:
+                val = JS_NewInt32(ctx, exp.value.toInt());
+                break;
+            case ModuleExport::Int64:
+                val = JS_NewInt64(ctx, exp.value.toLongLong());
+                break;
+            case ModuleExport::Double:
+                val = JS_NewFloat64(ctx, exp.value.toDouble());
+                break;
+            case ModuleExport::String:
+                val = JS_NewStringLen(ctx, exp.value.toString().toUtf8().constData(), exp.value.toString().toUtf8().size());
+                break;
+            case ModuleExport::Object:
+                // 处理嵌套对象（如 QObject）
+                if (exp.value.userType() == qMetaTypeId<QScriptValue>()) {
+                    QScriptValue sv = exp.value.value<QScriptValue>();
+                    val = JS_DupValue(ctx, sv.rawValue());
+                } else {
+                    val = JS_NewObject(ctx); // 空对象占位
+                }
+                break;
+            case ModuleExport::Function:
+                // QScriptValue 函数需要在这里设置实际值
+                if (exp.scriptValue.isValid()) {
+                    val = JS_DupValue(ctx, exp.scriptValue.rawValue());
+                }
+                break;
             }
-            break;
-        case ModuleExport::Function:
-            // QScriptValue 函数需要在这里设置实际值
-            if (exp.scriptValue.isValid()) {
-                val = JS_DupValue(ctx, exp.scriptValue.rawValue());
+
+            // 设置导出值
+            int ret = JS_SetModuleExport(ctx, m, exp.nameUtf8.constData(), val);
+            if (ret < 0) {
+                qWarning() << "Failed to set module export:" << exp.nameUtf8.constData();
             }
-            break;
-        }
 
-        // 设置导出值
-        int ret = JS_SetModuleExport(ctx, m, exp.nameUtf8.constData(), val);
-        if (ret < 0) {
-            qWarning() << "Failed to set module export:" << exp.nameUtf8.constData();
+            // 这里不能释放value，不然释放运行时调用GC的时候会报错
+            // JS_FreeValue(ctx, val);
+            JS_FreeAtom(ctx, atom);
         }
-
-        // 这里不能释放value，不然释放运行时调用GC的时候会报错
-        // JS_FreeValue(ctx, val);
-        JS_FreeAtom(ctx, atom);
     }
-
     return 0; // 成功
 }
 
@@ -1230,11 +1546,14 @@ QScriptSyntaxCheckResult QScriptEngine::checkSyntax(const QString &program)
         return QScriptSyntaxCheckResult();
     }
 
+    // 设置模块加载的函数，目前只能检测静态加载外部模块
+    JS_SetModuleLoaderFunc(rt, nullptr, js_module_loader_check, nullptr);
+
     QByteArray ba = program.toUtf8();
     const char *fn = "<check>";
-    bool isModule = JS_DetectModule(ba.constData(), ba.size());
-    isModule = isModule && detectModuleSyntax(ba); // 添加module相关的关键字判断
-    // isModule = false;
+    bool isModule;
+    // isModule = JS_DetectModule(ba.constData(), ba.size()); // 等待官方完善 JS_DetectModule
+    isModule = detectModuleSyntax(ba);  // 根据 import/export/await 检测模块语法
     qDebug() << "checkSyntax isModule: " << isModule;
     int flags = (isModule ? JS_EVAL_TYPE_MODULE : JS_EVAL_TYPE_GLOBAL) | JS_EVAL_FLAG_COMPILE_ONLY;
 

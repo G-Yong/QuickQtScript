@@ -33,6 +33,7 @@ HEADERS += \
     mainwindow.h \
     myqobject.h \
     barprototype.h \
+    myscriptcode.h \
     myscriptengineagent.h
 
 FORMS += \

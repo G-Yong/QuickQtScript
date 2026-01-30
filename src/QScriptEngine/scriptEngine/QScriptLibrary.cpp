@@ -23,6 +23,10 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+#include <QDebug>
+#include <QApplication>
+#include <QScriptEngine.h>
+#include <QScriptEngineAgent.h>
 #include "quickjs.h"
 #include <stdlib.h>
 #include <stdio.h>
@@ -4614,21 +4618,44 @@ void js_std_promise_rejection_tracker(JSContext *ctx, JSValueConst promise,
    asynchrously in case a rejected promise is handled later. Currently
    we do it once the application is about to sleep. It could be done
    more often if needed. */
-static void js_std_promise_rejection_check(JSContext *ctx)
+static bool js_std_promise_rejection_check(JSContext *ctx)
 {
     JSRuntime *rt = JS_GetRuntime(ctx);
     JSThreadState *ts = js_get_thread_state(rt);
     struct list_head *el;
 
     if (unlikely(!list_empty(&ts->rejected_promise_list))) {
+        QScriptEngine *engine = static_cast<QScriptEngine*>(JS_GetContextOpaque(ctx));
+        qint64 scriptId = engine->fileNameBuffer().length() - 1;
         list_for_each(el, &ts->rejected_promise_list) {
             JSRejectedPromiseEntry *rp = list_entry(el, JSRejectedPromiseEntry, link);
-            fprintf(stderr, "Possibly unhandled promise rejection: ");
-            js_std_dump_error1(ctx, rp->reason);
-            fflush(stderr);
+
+            // 调用Agent通知
+            if (engine && engine->agent() != nullptr) {
+                QScriptValue val(ctx, rp->reason, engine);
+                // 保存原始的异常
+                JSValue exception = JS_GetException(ctx);
+                // 先增加引用计数，因为throw调用后会释放掉
+                JS_Throw(ctx, JS_DupValue(ctx, rp->reason));
+                engine->agent()->exceptionThrow(scriptId, val, false);
+                // 放回原始的异常
+                JS_Throw(ctx, exception);
+            } else {
+                // 原始行为：输出到stderr
+                fprintf(stderr, "Possibly unhandled promise rejection: ");
+                js_std_dump_error1(ctx, rp->reason);
+                fflush(stderr);
+            }
+        // quickJS官方处理reject是把所有的reject都处理然后终止程序，这样的结果是会跳过js_std_loop后面的js_os_poll
+        // 然而如果处理reject时不终止程序，这样执行后面到js_os_poll时，会再一次进入js_std_promise_rejection_check
+        // 此时又会重复打印前面的reject错误和js_os_poll新产生的错误
+        // 如果根据Node.js的结果来看，当它运行到第一个reject，就会直接报错并终止程序, 但这是Node.js的全局作用域的问题
+        // 如果根据Chromium的结果来看，则是正常的
         }
-        exit(1);
+        // exit(1);
+        return true;
     }
+    return false;
 }
 
 /* main loop which calls the user JS callbacks */
@@ -4650,9 +4677,9 @@ int js_std_loop(JSContext *ctx)
             }
         }
 
-        js_std_promise_rejection_check(ctx);
-
-        if (!ts->can_js_os_poll || js_os_poll(ctx))
+        // js_std_promise_rejection_check(ctx);
+        // 修改js_std_promise_rejection_check返回值类型为bool
+        if (js_std_promise_rejection_check(ctx) || !ts->can_js_os_poll || js_os_poll(ctx))
             break;
     }
 done:
