@@ -4,13 +4,15 @@
 #include <QDebug>
 #include <QScriptContext>
 
-int scriptOPChanged(uint8_t op,
-                    const char *fileName,
-                    const char *funcName,
-                    int line,
-                    int col,
-                    void *userData
-                    )
+int scriptOPChanged(
+    JSContext *ctx,
+    uint8_t op,
+    const char *fileName,
+    const char *funcName,
+    int line,
+    int col,
+    void *userData
+    )
 {
     QScriptEngineAgent *agent = static_cast<QScriptEngineAgent*>(userData);
     if (!agent)
