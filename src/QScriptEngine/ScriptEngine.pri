@@ -55,10 +55,9 @@ contains(DEFINES, USE_LIBC){
     HEADERS += $$PWD/scriptEngine/include/QScriptLibrary.h
 }
 
-# 还是直接固定使用吧。否则在window下使用mingw时，又被钻了空子
-# 先添加宏定义，如果是msvc再去掉EMSCRIPTEN，不然JS_HAVE_THREADS会被覆盖掉
-    DEFINES += EMSCRIPTEN
-    DEFINES += JS_HAVE_THREADS
+# 添加EMSCRIPTEN；假如不添加的话，在mingw/linux下编译时，会导致DIRECT_DISPATCH被定义为1，从而使我们的机制失效
+DEFINES += EMSCRIPTEN
+DEFINES += JS_HAVE_THREADS
 
 win32: {
     DEFINES += __TINYC__
@@ -66,7 +65,8 @@ win32: {
     DEFINES += WIN32_LEAN_AND_MEAN
     msvc:
     {
-        DEFINES -= EMSCRIPTEN # MSVC编译时去掉EMSCRIPTEN
+        # 如果是msvc再去掉EMSCRIPTEN，不然JS_HAVE_THREADS会被覆盖掉
+        DEFINES -= EMSCRIPTEN
     }
 } else {
     # 在quick.js 第52行左右有这么一段代码
