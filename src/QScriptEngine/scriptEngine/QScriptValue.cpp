@@ -532,13 +532,15 @@ QString QScriptValue::toStringInternal(int depth) const
     bool isWeakMap = JS_IsWeakMap(m_value);
 
     if (isSet || isMap || isWeakSet || isWeakMap) {
+        // 先判断WeakSet和WeakMap
+        // Weak容器不可迭代，直接返回占位符
+        if (isWeakSet) return "{ < WeakSet > }";
+        if (isWeakMap) return "{ < WeakMap > }";
+
         if (depth <= 0)
         {
             return (isSet) ? "[Set]" : "[Map]";
         }
-        // Weak容器不可迭代，直接返回占位符
-        if (isWeakSet) return "{ < WeakSet > }";
-        if (isWeakMap) return "{ < WeakMap > }";
 
         // Set/Map 使用 Array.from 转换
         JSValue global = JS_GetGlobalObject(m_ctx);

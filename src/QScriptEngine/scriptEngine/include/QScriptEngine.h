@@ -135,7 +135,8 @@ public:
 
     };
     void registerModule(const QString &moduleName, const QList<ModuleExport> &exports);
-    QHash<QString, QList<ModuleExport>> m_moduleRegistry;
+    QHash<QString, QList<ModuleExport>> m_moduleRegistry;   // c++ 模块列表
+    QHash<QString, JSModuleDef*> m_loadedModules;     // 已加载模块缓存（防止重复求值）
     // 静态模块初始化回调
     static int moduleInitCallback(JSContext *ctx, JSModuleDef *m);
 
@@ -166,6 +167,13 @@ public:
         return mFileNameBuffer;
     }
 
+    // 获取所有未捕获的 Promise rejection 错误
+    QList<QScriptValue> uncaughtPromiseRejections() const;
+    // 是否有未捕获的异步错误
+    bool hasUncaughtPromiseRejections() const {
+        return !m_uncaughtPromiseRejections.isEmpty();
+    }
+
 public:
     bool getNativeEntry(int idx, FunctionWithArgSignature &outFunc, void **outArg, JSValue &callee) const;
     QObject *qobjectFromJSValue(JSContext *ctx, JSValueConst val) const;
@@ -173,6 +181,12 @@ public:
 
 private:
     QScriptValue registerNativeFunction(FunctionWithArgSignature signature, void *arg, int length = 0, int cproto = JS_CFUNC_generic_magic);
+    static void promiseRejectionTracker(JSContext *ctx, JSValueConst promise,
+                                        JSValueConst reason,
+                                        bool is_handled, void *opaque); // 处理异步 reject 的回调函数
+    mutable QList<QScriptValue> m_uncaughtPromiseRejections;  // 存储所有未处理的 reject
+    void clearUncaughtPromiseRejections();  // 清空所有未处理的 reject
+    JSValue awaitPromise(JSValue promise, bool isModule = false);  // 等待异步promise处理函数
 
 private:
     JSRuntime *m_rt{nullptr};
