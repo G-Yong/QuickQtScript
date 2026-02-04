@@ -6,6 +6,7 @@
 #include <QtConcurrentRun>
 #include <QDateTime>
 #include <QScriptValueIterator>
+#include <QMessageBox>
 
 #include "codeEditor/jscodeeditor.h"
 #include "myscriptengineagent.h"
@@ -216,20 +217,27 @@ void MainWindow::on_pushButton_start_clicked()
 #endif
 
             auto chkRet = engine.checkSyntax(scriptStr);
-            qDebug() << "result:"
+            qDebug() << "check result:"
+                     << chkRet.isValid()
                      << chkRet.errorLineNumber()
                      << chkRet.errorColumnNumber()
                      << chkRet.errorMessage();
-
-            QScriptValue result;
-            result = engine.evaluate(scriptStr, JS_FILE_NAME, 0);
-
-            if(result.isError())
+            if(chkRet.isValid() == false)
             {
-                handleLog(result.toString());
+                // 当有语法错误时，假装其是一个运行时错误，方便显示
+                mEngineAgent->positionChange(0, chkRet.errorLineNumber(), chkRet.errorColumnNumber());
+                handleLog(chkRet.errorMessage());
             }
-
-            qDebug() << "script result:" << result.toString();
+            else
+            {
+                QScriptValue result;
+                result = engine.evaluate(scriptStr, JS_FILE_NAME, 0);
+                qDebug() << "script result:" << result.toString();
+                if(result.isError())
+                {
+                    handleLog(result.toString());
+                }
+            }
 
             // 检查异步错误 // 也可以放在evaluate里面进行判断
             if (engine.hasUncaughtPromiseRejections()) {
