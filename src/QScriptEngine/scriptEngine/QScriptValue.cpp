@@ -860,8 +860,8 @@ static QVariant JSValueToQVariant(JSContext *ctx, JSValueConst val, QScriptEngin
         JS_IsError(val)
         )
     {
-        QScriptValue val(ctx, val, engine);
-        return QVariant(val.toString());
+        QScriptValue tmpVal(ctx, val, engine);
+        return QVariant(tmpVal.toString());
     }
 
     if(JS_IsUndefined(val))
