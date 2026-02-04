@@ -5,6 +5,7 @@
 #include <QDebug>
 #include <QVariantMap>
 #include <QVariantList>
+#include <QJsonValue>
 
 #include <vector>
 
@@ -800,17 +801,6 @@ QVariant QScriptValue::toVariant() const
     if (m_isVariant)
         return m_variant;
 
-    // 特殊类型，QVariant无法存储，返回字符串形式
-    if(JS_IsSymbol(m_value) ||
-        JS_IsSet(m_value) ||
-        JS_IsMap(m_value) ||
-        JS_IsWeakSet(m_value) ||
-        JS_IsWeakMap(m_value)
-        )
-    {
-        return QVariant(toString());
-    }
-
     // convert object to QVariant via helper
     return JSValueToQVariant(m_ctx, m_value, m_engine, 8);
 }
@@ -861,8 +851,29 @@ static QVariant JSValueToQVariant(JSContext *ctx, JSValueConst val, QScriptEngin
     if (!ctx || depth <= 0)
         return QVariant();
 
-    if (JS_IsUndefined(val) || JS_IsNull(val))
-        return QVariant();
+    // 特殊类型，QVariant无法存储，返回字符串形式
+    if(JS_IsSymbol(val) ||
+        JS_IsSet(val) ||
+        JS_IsMap(val) ||
+        JS_IsWeakSet(val) ||
+        JS_IsWeakMap(val) ||
+        JS_IsError(val)
+        )
+    {
+        QScriptValue val(ctx, val, engine);
+        return QVariant(val.toString());
+    }
+
+    if(JS_IsUndefined(val))
+    {
+        QJsonValue tmpVal(QJsonValue::Undefined);
+        return QVariant::fromValue(tmpVal);
+    }
+    if(JS_IsNull(val))
+    {
+        QJsonValue tmpVal(QJsonValue::Null);
+        return QVariant::fromValue(tmpVal);
+    }
 
     if (JS_IsString(val)) {
         JSValue s = JS_ToString(ctx, val);
