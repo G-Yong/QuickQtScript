@@ -662,7 +662,16 @@ QString QScriptValue::toStringInternal(int depth) const
 
                 JSAtom atom = props[i].atom;
                 const char *name = JS_AtomToCString(m_ctx, atom);
-                res += (name ? name : "") + QString(": ");
+                QString key = name ? QString::fromUtf8(name) : QString();
+                // 如果是Node.js的输出显示，似乎是第一个字符是数字那么键名就会加上引号
+                // 如果是chromium的输出显示，则不会加上引号，因为对象的键名在存储的时候都是按照字符串来存储的
+                // 暂时按照chromium的输出显示来处理
+                // if (!key.isEmpty() && key[0].isDigit()) {
+                //     res += "'" + key + "'";
+                // } else {
+                //     res += key;
+                // }
+                res += QString(": ");
                 JS_FreeCString(m_ctx, name);
 
                 JSValue propVal = JS_GetProperty(m_ctx, m_value, atom);
@@ -699,6 +708,7 @@ QString QScriptValue::toStringInternal(int depth) const
         const char *c = JS_ToCString(m_ctx, s);
 
         res = QString::fromUtf8(c ? c : "");
+        if (JS_IsBigInt(m_value)) res += "n";
 
         JS_FreeCString(m_ctx, c);
         JS_FreeValue(m_ctx, s);
