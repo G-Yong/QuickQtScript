@@ -858,20 +858,25 @@ JSValue QScriptValue::toJSValue(JSContext *ctx, QVariant var)
 // Recursive helper: convert a QuickJS value to QVariant with depth limit
 static QVariant JSValueToQVariant(JSContext *ctx, JSValueConst val, QScriptEngine *engine, int depth)
 {
-    if (!ctx || depth <= 0)
+    if(!ctx)
+    {
         return QVariant();
+    }
 
+    // 堆栈到达一定深度，便不再继续解析，防止循环引用导致无限递归
     // 特殊类型，QVariant无法存储，返回字符串形式
-    if(JS_IsSymbol(val) ||
+    if( depth <= 0 ||
+        JS_IsSymbol(val) ||
         JS_IsSet(val) ||
         JS_IsMap(val) ||
         JS_IsWeakSet(val) ||
         JS_IsWeakMap(val) ||
-        JS_IsError(val)
+        JS_IsError(val) ||
+        JS_IsBigInt(val)
         )
     {
         QScriptValue tmpVal(ctx, val, engine);
-        return QVariant(tmpVal.toString());
+        return QVariant("sepecial object=>" + tmpVal.toString());
     }
 
     if(JS_IsUndefined(val))
