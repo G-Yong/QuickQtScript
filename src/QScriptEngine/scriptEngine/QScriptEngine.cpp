@@ -1580,9 +1580,9 @@ QScriptSyntaxCheckResult QScriptEngine::checkSyntax(const QString &program)
     int line = -1;
     int column = -1;
 
-    QScriptValue aVal = QScriptValue(ctx, val, nullptr);
+    // QScriptValue aVal = QScriptValue(ctx, val, nullptr);
 
-    JS_FreeValue(ctx, val);
+    // JS_FreeValue(ctx, val);
 
     JSValue exception = JS_GetException(ctx);
 
