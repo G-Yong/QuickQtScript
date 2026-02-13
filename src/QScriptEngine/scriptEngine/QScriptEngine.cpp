@@ -216,6 +216,13 @@ static JSModuleDef *js_module_loader_check(JSContext *ctx,
                                         void *opaque)
 {
     QString moduleName(module_name);
+    // 如果是裸标识符（没有文件后缀且不是路径），视为 package/config 模块，编译检测时跳过
+    QFileInfo mi(moduleName);
+    if (mi.suffix().isEmpty() && !moduleName.contains('/') && !moduleName.contains('\\')) {
+        qDebug() << "Bare module specifier (package/config), skip checking:" << moduleName;
+        JSModuleDef *m = JS_NewCModule(ctx, module_name, nullptr);
+        return m;
+    }
     // 默认路径为main.cpp的目录
     /* 注意此处的模块路径，因为有可能编模块译检测和引擎执行的文件位置不一致 */
     moduleName = "../../" + moduleName;
@@ -1631,5 +1638,8 @@ QScriptSyntaxCheckResult QScriptEngine::checkSyntax(const QString &program)
         message = msg.left(atPos).trimmed();  // 只保留前面的错误描述
     }
 
+    JS_FreeValue(ctx, val);
+    JS_FreeContext(ctx);
+    JS_FreeRuntime(rt);
     return QScriptSyntaxCheckResult(message, line, column);
 }

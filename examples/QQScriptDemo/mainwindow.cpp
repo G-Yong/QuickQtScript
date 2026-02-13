@@ -247,6 +247,10 @@ void MainWindow::on_pushButton_start_clicked()
                 }
             }
 
+            barPrototypeObject->deleteLater();
+            // delete barPrototypeObject;
+            // barPrototypeObject = nullptr;
+
             QMetaObject::invokeMethod(this, [=](){
                 // on_pushButton_stop_clicked();    // 脚本暂停后再点击停止，似乎会重复调用
                 ui->pushButton_start->setVisible(true);
