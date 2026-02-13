@@ -247,6 +247,14 @@ void MainWindow::on_pushButton_start_clicked()
                 }
             }
 
+            // 标记该对象然后调用对应线程下的释放操作
+            barPrototypeObject->deleteLater();
+            QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+
+            // 或者由于变量在之后没有继续被使用到，直接delete也行
+            // delete barPrototypeObject;
+            // barPrototypeObject = nullptr;
+
             QMetaObject::invokeMethod(this, [=](){
                 // on_pushButton_stop_clicked();    // 脚本暂停后再点击停止，似乎会重复调用
                 ui->pushButton_start->setVisible(true);
