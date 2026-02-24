@@ -18,7 +18,6 @@ INCLUDEPATH += $$PWD/scriptEngine/include
 # 注意，此处使用的是 quickjs-ng https://github.com/quickjs-ng/quickjs
 # 而不是原版的，原版的对windows支持不好 https://github.com/bellard/quickjs
 SOURCES += \
-    $$PWD/quickjs/cutils.c \
     $$PWD/quickjs/dtoa.c \
     $$PWD/quickjs/libregexp.c \
     $$PWD/quickjs/libunicode.c \
