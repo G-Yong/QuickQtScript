@@ -4,91 +4,14 @@
 #include <QDebug>
 #include <QScriptContext>
 
-int scriptOPChanged(
-    JSContext *ctx,
-    uint8_t op,
-    const char *fileName,
-    const char *funcName,
-    int line,
-    int col,
-    void *userData
-    )
-{
-    QScriptEngineAgent *agent = static_cast<QScriptEngineAgent*>(userData);
-    if (!agent)
-        return -1;
-
-    // qDebug() << OP_call << OP_return;
-
-    // qDebug() << "op changed:"
-    //          << (QJDefines::OPCodeEnum)op
-    //          << fileName
-    //          << funcName
-    //          << line
-    //          << col;
-
-    int scriptId = agent->scriptId(fileName);
-
-
-    // 使用函数名变化来检测函数进入/退出
-    // 但是在执行自定义c++函数，不会有函数名的变更。因此对于自定义的函数，需要在QScriptEngine中处理
-
-    // 进入函数
-    QString currentFuncName = funcName ? QString(funcName) : QString();
-    if(currentFuncName.isEmpty() == false && currentFuncName != "<eval>")
-    {
-        QList<QString> &funcStack = agent->mFuncStack;
-        if(funcStack.length() == 0)
-        {
-            funcStack << currentFuncName;
-            agent->functionEntry(scriptId);
-            agent->mFuncStackCounter++;
-        }
-        else if(funcStack.last() != currentFuncName)
-        {
-            funcStack << currentFuncName;
-            agent->functionEntry(scriptId);
-            agent->mFuncStackCounter++;
-        }
-    }
-
-    switch(op)
-    {
-    case QJDefines::OP_return_undef:
-    case QJDefines::OP_return_async:
-    case QJDefines::OP_return:{
-        QList<QString> &funcStack = agent->mFuncStack;
-        if(funcStack.length() > 0)
-        {
-            agent->functionExit(scriptId, QScriptValue());
-            agent->mFuncStackCounter--;
-            funcStack.removeLast();
-        }
-    };break;
-    }
-
-    // 一定要让functionEntry/functionExit在positionChange前面
-    // 只有这样才符合Qt原版的逻辑
-    if(1)
-    {
-        // 不能每次op变动都调用一次，要行列号变化才调用
-        if(agent->isPosChanged(line, col))
-        {
-            // qDebug() << "script id:" << scriptId << fileName << line << col;
-            agent->positionChange(scriptId, line, col);
-        }
-    }
-
-    return 0;
-}
-
 QScriptEngineAgent::QScriptEngineAgent(QScriptEngine *engine)
     : m_engine(engine)
 {
     mLastLine = -1;
     mLastCol = -1;
 
-    JS_SetOPChangedHandler(engine->ctx(), scriptOPChanged, this);
+    // 设置 agent 引用，
+    // QScriptEngine.cpp中的scriptOPChanged 会通过 engine->agent()来调用 agent 的函数，所以必须设置引用
     engine->setAgent(this);
 }
 

@@ -520,18 +520,104 @@ static void qobject_finalizer(JSRuntime *rt, JSValueConst val)
 // 不然就会出现 资源未释放/资源重复释放的问题
 
 
-// 中断函数，用于实现 abortEval
-static int custom_interrupt_handler(JSRuntime *rt, void *opaque) {
-    QScriptEngine *engine = static_cast<QScriptEngine*>(opaque);
-    if (!engine)
-        return 1;
+// // 中断函数，用于实现 abortEval
+// static int custom_interrupt_handler(JSRuntime *rt, void *opaque) {
+//     QScriptEngine *engine = static_cast<QScriptEngine*>(opaque);
+//     if (!engine)
+//         return 1;
 
-    // 检查中断标志
+//     // 检查中断标志
+//     if (std::atomic_load(&engine->interrupt_flag)) {
+//         // 可以在这里进行清理
+//         qDebug() << "Interrupting script execution" << QDateTime::currentDateTime();
+//         return 1;  // 返回1表示请求中断
+//     }
+//     return 0;
+// }
+
+// 操作码变更回调，每个操作码执行前触发
+// 放在 QScriptEngine 层而非 QScriptEngineAgent 层，确保无论是否设置 agent 都能响应中断
+static int scriptOPChanged(
+    JSContext *ctx,
+    uint8_t op,
+    const char *fileName,
+    const char *funcName,
+    int line,
+    int col,
+    void *userData
+    )
+{
+    QScriptEngine *engine = static_cast<QScriptEngine*>(userData);
+    if (!engine)
+        return -1;
+
+    // 检查中断标志，实现零延迟终止
+    // 与 QuickJS 内部 JS_ThrowInterrupted 使用相同的模式：
+    // 抛出不可捕获的 InternalError，使 try/catch 无法拦截
     if (std::atomic_load(&engine->interrupt_flag)) {
-        // 可以在这里进行清理
-        qDebug() << "Interrupting script execution" << QDateTime::currentDateTime();
-        return 1;  // 返回1表示请求中断
+        JS_ThrowInternalError(ctx, "interrupted");
+        JSValue exc = JS_GetException(ctx);
+        JS_SetUncatchableError(ctx, exc);
+        JS_Throw(ctx, exc);
+        return -1; // 触发 QuickJS 字节码循环中的 goto exception
     }
+
+    // 如果设置了 agent，则转发 agent 的回调
+    QScriptEngineAgent *agent = engine->agent();
+    if (!agent)
+        return 0;
+
+    int scriptId = agent->scriptId(fileName);
+
+    // 使用函数名变化来检测函数进入/退出
+    // 但是在执行自定义c++函数，不会有函数名的变更。因此对于自定义的函数，需要在QScriptEngine中处理
+
+    // 进入函数
+    QString currentFuncName = funcName ? QString(funcName) : QString();
+    if(currentFuncName.isEmpty() == false && currentFuncName != "<eval>")
+    {
+        QList<QString> &funcStack = agent->mFuncStack;
+        if(funcStack.length() == 0)
+        {
+            funcStack << currentFuncName;
+            agent->functionEntry(scriptId);
+            agent->mFuncStackCounter++;
+        }
+        else if(funcStack.last() != currentFuncName)
+        {
+            funcStack << currentFuncName;
+            agent->functionEntry(scriptId);
+            agent->mFuncStackCounter++;
+        }
+    }
+
+    switch(op)
+    {
+    case QJDefines::OP_return_undef:
+    case QJDefines::OP_return_async:
+    case QJDefines::OP_return:{
+        QList<QString> &funcStack = agent->mFuncStack;
+        if(funcStack.length() > 0)
+        {
+            agent->functionExit(scriptId, QScriptValue());
+            agent->mFuncStackCounter--;
+            funcStack.removeLast();
+        }
+    };break;
+    }
+
+    // 一定要让functionEntry/functionExit在positionChange前面
+    // 只有这样才符合Qt原版的逻辑
+    if(1)
+    {
+        // 不能每次op变动都调用一次，要行列号变化才调用
+        if(agent->isPosChanged(line, col))
+        {
+            // qDebug() << "script id:" << scriptId << fileName << line << col;
+            agent->positionChange(scriptId, line, col);
+        }
+    }
+
     return 0;
 }
 
@@ -549,10 +635,13 @@ static JSValue nativeFunctionShim(JSContext *ctx,
     if (!engine)
         return JS_UNDEFINED;
 
-    // 检查中断标志
+    // 检查中断标志，抛出不可捕获的异常以确保 try/catch 无法拦截
     if (std::atomic_load(&engine->interrupt_flag)) {
-        auto value = JS_ThrowTypeError(ctx, "%s", "stop");
-        return value;
+        JS_ThrowInternalError(ctx, "interrupted");
+        JSValue exc = JS_GetException(ctx);
+        JS_SetUncatchableError(ctx, exc);
+        JS_Throw(ctx, exc);
+        return JS_EXCEPTION;
     }
 
     QScriptEngine::FunctionWithArgSignature func = nullptr;
@@ -662,8 +751,8 @@ QScriptEngine::QScriptEngine(QObject *parent)
 
     // 重置中断标志
     std::atomic_store(&interrupt_flag, 0);
-    // 设置中断处理器
-    JS_SetInterruptHandler(m_rt, custom_interrupt_handler, this);
+    // // 设置中断处理器
+    // JS_SetInterruptHandler(m_rt, custom_interrupt_handler, this);
 
     // 这样是实现对QObject对象的析构
     // Register a QuickJS class to wrap QObject pointers
@@ -694,6 +783,10 @@ QScriptEngine::QScriptEngine(QObject *parent)
         JS_FreeValue(m_ctx, g);
     }
     JS_SetModuleLoaderFunc(m_rt, nullptr, js_module_loader_qt, this); // 传递 this
+
+    // 注册操作码变更回调，传递 QScriptEngine* 而非 agent
+    // 这样即使没有设置 agent，中断检查也能在每个操作码处生效
+    JS_SetOPChangedHandler(m_ctx, scriptOPChanged, this);
 
     // 可以通过设置需要统计的flag，在引擎RunTime销毁的时候输出内存的使用情况
     {
