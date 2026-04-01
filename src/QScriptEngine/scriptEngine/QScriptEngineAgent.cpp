@@ -11,7 +11,7 @@ QScriptEngineAgent::QScriptEngineAgent(QScriptEngine *engine)
     mLastCol = -1;
 
     // 设置 agent 引用，
-    // QScriptEngine.cpp中的scriptOPChanged 会通过 engine->agent()来调用 agent 的函数，所以必须设置引用
+    // QScriptEngine.cpp中的scriptDebugBreak 会通过 engine->agent()来调用 agent 的函数，所以必须设置引用
     engine->setAgent(this);
 }
 

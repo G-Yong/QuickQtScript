@@ -535,21 +535,21 @@ static void qobject_finalizer(JSRuntime *rt, JSValueConst val)
 //     return 0;
 // }
 
-// 操作码变更回调，每个操作码执行前触发
+// 调试断点回调，在语句边界触发（OP_debug 指令）
+// 使用 JS_NewDebugContext 注册，替代旧版自定义的 JS_SetOPChangedHandler
 // 放在 QScriptEngine 层而非 QScriptEngineAgent 层，确保无论是否设置 agent 都能响应中断
-static int scriptOPChanged(
+static int scriptDebugBreak(
     JSContext *ctx,
-    uint8_t op,
     const char *fileName,
     const char *funcName,
     int line,
-    int col,
-    void *userData
+    int col
     )
 {
-    QScriptEngine *engine = static_cast<QScriptEngine*>(userData);
+    void *opaque = JS_GetContextOpaque(ctx);
+    QScriptEngine *engine = static_cast<QScriptEngine*>(opaque);
     if (!engine)
-        return -1;
+        return 0;
 
     // 检查中断标志，实现零延迟终止
     // 与 QuickJS 内部 JS_ThrowInterrupted 使用相同的模式：
@@ -569,48 +569,31 @@ static int scriptOPChanged(
 
     int scriptId = agent->scriptId(fileName);
 
-    // 使用函数名变化来检测函数进入/退出
-    // 但是在执行自定义c++函数，不会有函数名的变更。因此对于自定义的函数，需要在QScriptEngine中处理
+    // 通过 JS_GetStackDepth 检测函数进入/退出
+    // 栈深度增加 = 进入了新函数，栈深度减少 = 有函数返回了
+    int curDepth = JS_GetStackDepth(ctx);
+    int lastDepth = agent->mLastStackDepth;
 
-    // 进入函数
-    QString currentFuncName = funcName ? QString(funcName) : QString();
-    if(currentFuncName.isEmpty() == false && currentFuncName != "<eval>")
-    {
-        QList<QString> &funcStack = agent->mFuncStack;
-        if(funcStack.length() == 0)
-        {
-            funcStack << currentFuncName;
+    if (curDepth > lastDepth) {
+        // 栈深度增加，触发 functionEntry（可能一次增加多层）
+        for (int i = 0; i < curDepth - lastDepth; ++i) {
             agent->functionEntry(scriptId);
             agent->mFuncStackCounter++;
         }
-        else if(funcStack.last() != currentFuncName)
-        {
-            funcStack << currentFuncName;
-            agent->functionEntry(scriptId);
-            agent->mFuncStackCounter++;
-        }
-    }
-
-    switch(op)
-    {
-    case QJDefines::OP_return_undef:
-    case QJDefines::OP_return_async:
-    case QJDefines::OP_return:{
-        QList<QString> &funcStack = agent->mFuncStack;
-        if(funcStack.length() > 0)
-        {
+    } else if (curDepth < lastDepth) {
+        // 栈深度减少，触发 functionExit（可能一次减少多层）
+        for (int i = 0; i < lastDepth - curDepth; ++i) {
             agent->functionExit(scriptId, QScriptValue());
             agent->mFuncStackCounter--;
-            funcStack.removeLast();
         }
-    };break;
     }
+    agent->mLastStackDepth = curDepth;
 
     // 一定要让functionEntry/functionExit在positionChange前面
     // 只有这样才符合Qt原版的逻辑
     if(1)
     {
-        // 不能每次op变动都调用一次，要行列号变化才调用
+        // 不能每次都调用，要行列号变化才调用
         if(agent->isPosChanged(line, col))
         {
             // qDebug() << "script id:" << scriptId << fileName << line << col;
@@ -733,9 +716,16 @@ QScriptEngine::QScriptEngine(QObject *parent)
 #ifdef USE_LIBC
     js_std_set_worker_new_context_func(JS_NewCustomContext);
     js_std_init_handlers(m_rt);
-    m_ctx = JS_NewCustomContext(m_rt);
+    // 主上下文使用 JS_NewDebugContext 创建，以支持调试回调（OP_debug 操作码）
+    m_ctx = JS_NewDebugContext(m_rt, scriptDebugBreak);
+    if (m_ctx) {
+        js_init_module_std(m_ctx, "std");
+        js_init_module_os(m_ctx, "os");
+        js_init_module_bjson(m_ctx, "bjson");
+    }
 #else
-    m_ctx = JS_NewContext(m_rt);
+    // 使用 JS_NewDebugContext 代替 JS_NewContext，启用调试断点回调
+    m_ctx = JS_NewDebugContext(m_rt, scriptDebugBreak);
 #endif
 
     if(!m_ctx)
@@ -784,9 +774,8 @@ QScriptEngine::QScriptEngine(QObject *parent)
     }
     JS_SetModuleLoaderFunc(m_rt, nullptr, js_module_loader_qt, this); // 传递 this
 
-    // 注册操作码变更回调，传递 QScriptEngine* 而非 agent
-    // 这样即使没有设置 agent，中断检查也能在每个操作码处生效
-    JS_SetOPChangedHandler(m_ctx, scriptOPChanged, this);
+    // 调试断点回调已通过 JS_NewDebugContext 在创建上下文时注册（scriptDebugBreak）
+    // 即使没有设置 agent，中断检查也能在每个语句边界生效
 
     // 可以通过设置需要统计的flag，在引擎RunTime销毁的时候输出内存的使用情况
     {
@@ -921,6 +910,8 @@ QScriptValue QScriptEngine::evaluate(const QString &program, const QString &file
         agent()->scriptLoad(scriptId, program, fileName, lineNumber);
         agent()->functionEntry(scriptId);
         agent()->mFuncStackCounter++;
+        // 记录 eval 开始时的栈深度，供 scriptDebugBreak 中的深度比较使用
+        agent()->mLastStackDepth = JS_GetStackDepth(m_ctx);
     }
 
     struct EvalGuard {
