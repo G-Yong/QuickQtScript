@@ -536,9 +536,8 @@ static void qobject_finalizer(JSRuntime *rt, JSValueConst val)
 // }
 
 // 调试断点回调，在语句边界触发（OP_debug 指令）
-// 使用 JS_NewDebugContext 注册，替代旧版自定义的 JS_SetOPChangedHandler
 // 放在 QScriptEngine 层而非 QScriptEngineAgent 层，确保无论是否设置 agent 都能响应中断
-static int scriptDebugBreak(
+static int scriptDebugTrace(
     JSContext *ctx,
     const char *fileName,
     const char *funcName,
@@ -717,15 +716,16 @@ QScriptEngine::QScriptEngine(QObject *parent)
     js_std_set_worker_new_context_func(JS_NewCustomContext);
     js_std_init_handlers(m_rt);
     // 主上下文使用 JS_NewDebugContext 创建，以支持调试回调（OP_debug 操作码）
-    m_ctx = JS_NewDebugContext(m_rt, scriptDebugBreak);
+    m_ctx = JS_NewContext(m_rt);
+    JS_SetDebugTraceHandler(m_ctx, scriptDebugTrace);
     if (m_ctx) {
         js_init_module_std(m_ctx, "std");
         js_init_module_os(m_ctx, "os");
         js_init_module_bjson(m_ctx, "bjson");
     }
 #else
-    // 使用 JS_NewDebugContext 代替 JS_NewContext，启用调试断点回调
-    m_ctx = JS_NewDebugContext(m_rt, scriptDebugBreak);
+    m_ctx = JS_NewContext(m_rt);
+    JS_SetDebugTraceHandler(m_ctx, scriptDebugTrace);
 #endif
 
     if(!m_ctx)
