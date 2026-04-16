@@ -54,13 +54,10 @@ contains(DEFINES, USE_LIBC){
     HEADERS += $$PWD/scriptEngine/include/QScriptLibrary.h
 }
 
-# 添加EMSCRIPTEN；假如不添加的话，在mingw/linux下编译时，会导致DIRECT_DISPATCH被定义为1，从而使我们的机制失效
-DEFINES += EMSCRIPTEN
-DEFINES += JS_HAVE_THREADS
+# 目前quickjs使用 OP_debug 方式进行debug，不会受到DIRECT_DISPATCH的影响
+# 具体解释请查阅 https://github.com/quickjs-ng/quickjs/pull/1421
 
-# 添加QJS_ENABLE_DEBUGGER，以便在调试时使用调试器功能
-# 只有当 #define DIRECT_DISPATCH  0 时，才能保证每次操作码变化时都进入调试
-DEFINES += QJS_ENABLE_DEBUGGER
+DEFINES += JS_HAVE_THREADS
 
 win32: {
     DEFINES += __TINYC__

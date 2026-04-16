@@ -191,6 +191,7 @@ void QScriptEngine::promiseRejectionTracker(JSContext *ctx, JSValueConst promise
     }
 }
 
+#ifdef USE_LIBC
 // 自定义创建上下文函数
 static JSContext *JS_NewCustomContext(JSRuntime *rt)
 {
@@ -207,6 +208,7 @@ static JSContext *JS_NewCustomContext(JSRuntime *rt)
 
     return ctx;
 }
+#endif
 
 // 去掉QScriptEngine相关的内容
 // 该函数用于编译过程中的语法检测

@@ -198,7 +198,7 @@ void MainWindow::on_pushButton_start_clicked()
             // 配置模块属性
             QList<QScriptEngine::ModuleExport> exports;
             exports << QScriptEngine::ModuleExport("int32", 42, QScriptEngine::ModuleExport::Int32);
-            exports << QScriptEngine::ModuleExport("int64", 666ll, QScriptEngine::ModuleExport::Int64);
+            exports << QScriptEngine::ModuleExport("int64", (int64_t)666, QScriptEngine::ModuleExport::Int64);
             exports << QScriptEngine::ModuleExport("double", 1.234, QScriptEngine::ModuleExport::Double);
             exports << QScriptEngine::ModuleExport("str", QString("这是模块字符串属性"), QScriptEngine::ModuleExport::String);
 
