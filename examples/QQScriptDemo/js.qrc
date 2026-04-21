@@ -1,0 +1,6 @@
+<RCC>
+    <qresource prefix="/">
+        <file>js_module/moduleA.js</file>
+        <file>js_module/moduleB.js</file>
+    </qresource>
+</RCC>

@@ -226,11 +226,17 @@ static JSModuleDef *js_module_loader_check(JSContext *ctx,
         JSModuleDef *m = JS_NewCModule(ctx, module_name, nullptr);
         return m;
     }
-    // 默认路径为main.cpp的目录
+
     /* 注意此处的模块路径，因为有可能编模块译检测和引擎执行的文件位置不一致 */
-    moduleName = "../../../" + moduleName;
+    QString defaultPath = ":/js_module/" + moduleName;
+    moduleName = "js_module/" + moduleName;
     // 强制当前的js文件目录从可执行文件的目录开始搜寻，避免不同QT Creator版本下的QDir::current()的差异
-    QString filename = QDir(QCoreApplication::applicationDirPath()).filePath(moduleName);
+    QFileInfo exePath(QCoreApplication::applicationFilePath());
+
+    QString filename = QDir(exePath.path()).filePath(moduleName);
+
+    // 如果没有在可执行文件的同一目录下的 js_module 找到js文件，则从qrc文件中寻找
+    filename = QFile::exists(filename) ? filename : defaultPath;
 
     // 检查文件是否存在
     QFileInfo fileInfo(filename);
@@ -365,10 +371,15 @@ static JSModuleDef *js_module_loader_qt(JSContext *ctx,
         return m;
     }
 
-    // 默认路径为main.cpp的目录
-    moduleName = "../../../" + moduleName;
+    QString defaultPath = ":/js_module/" + moduleName;
+    moduleName = "js_module/" + moduleName;
     // 强制当前的js文件目录从可执行文件的目录开始搜寻，避免不同QT Creator版本下的QDir::current()的差异
-    QString filename = QDir(QCoreApplication::applicationDirPath()).filePath(moduleName);
+    QFileInfo exePath(QCoreApplication::applicationFilePath());
+
+    QString filename = QDir(exePath.path()).filePath(moduleName);
+
+    // 如果没有在可执行文件的同一目录下的 js_module 找到js文件，则从qrc文件中寻找
+    filename = QFile::exists(filename) ? filename : defaultPath;
 
     // 检查文件是否存在
     QFileInfo fileInfo(filename);
