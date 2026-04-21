@@ -9,6 +9,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QDir>
+#include <QCoreApplication>
 
 #include <mutex>
 #include <vector>
@@ -227,9 +228,9 @@ static JSModuleDef *js_module_loader_check(JSContext *ctx,
     }
     // 默认路径为main.cpp的目录
     /* 注意此处的模块路径，因为有可能编模块译检测和引擎执行的文件位置不一致 */
-    moduleName = "../../" + moduleName;
-    // 处理文件路径
-    QString filename = QDir::current().filePath(moduleName);
+    moduleName = "../../../" + moduleName;
+    // 强制当前的js文件目录从可执行文件的目录开始搜寻，避免不同QT Creator版本下的QDir::current()的差异
+    QString filename = QDir(QCoreApplication::applicationDirPath()).filePath(moduleName);
 
     // 检查文件是否存在
     QFileInfo fileInfo(filename);
@@ -365,9 +366,9 @@ static JSModuleDef *js_module_loader_qt(JSContext *ctx,
     }
 
     // 默认路径为main.cpp的目录
-    moduleName = "../../" + moduleName;
-    // 处理文件路径
-    QString filename = QDir::current().filePath(moduleName);
+    moduleName = "../../../" + moduleName;
+    // 强制当前的js文件目录从可执行文件的目录开始搜寻，避免不同QT Creator版本下的QDir::current()的差异
+    QString filename = QDir(QCoreApplication::applicationDirPath()).filePath(moduleName);
 
     // 检查文件是否存在
     QFileInfo fileInfo(filename);
