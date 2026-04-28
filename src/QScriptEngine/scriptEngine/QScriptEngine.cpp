@@ -1509,7 +1509,14 @@ QObject *QScriptEngine::qobjectFromJSValue(JSContext *ctx, JSValueConst val) con
 {
     if (!ctx)
         return nullptr;
-    void *p = JS_GetOpaque2(ctx, val, m_qobjectClassId);
+    // 这里只是用来探测一个 JSValue 是否为我们包装的 QObject，
+    // 不能使用 JS_GetOpaque2：它在 class_id 不匹配时会向 ctx 抛出
+    // "QScriptQObject object expected" 的 TypeError，污染上下文，
+    // 导致后续在不相关位置（如 MOVP 完成后）报错。
+    // 使用 JS_GetOpaque：不匹配时直接返回 NULL，不抛异常。
+    if (!JS_IsObject(val))
+        return nullptr;
+    void *p = JS_GetOpaque(val, m_qobjectClassId);
     if (!p)
         return nullptr;
     QObjectWrapper *w = static_cast<QObjectWrapper*>(p);
