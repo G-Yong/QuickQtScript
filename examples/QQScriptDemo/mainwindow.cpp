@@ -6,6 +6,7 @@
 #include <QtConcurrentRun>
 #include <QDateTime>
 #include <QScriptValueIterator>
+#include <QInputDialog>
 #include <QMessageBox>
 
 #include "codeEditor/jscodeeditor.h"
@@ -34,6 +35,27 @@ QScriptValue funcSleep(QScriptContext *context, QScriptEngine *engine, void *dat
 QScriptValue funcWithoutData(QScriptContext *context, QScriptEngine *engine);
 QScriptValue Foo(QScriptContext *context, QScriptEngine *engine);
 QScriptValue constructBar(QScriptContext *context, QScriptEngine *engine);
+
+// 使用宽字符串
+static QString runToLineDialogTitle()
+{
+    return QString::fromWCharArray(L"运行到指定行");
+}
+
+static QString runToLineDialogLabel()
+{
+    return QString::fromWCharArray(L"请输入目标行号");
+}
+
+static QString runToLineHintTitle()
+{
+    return QString::fromWCharArray(L"提示");
+}
+
+static QString runToLineWarningText(int requestedLine)
+{
+    return QString::fromWCharArray(L"无法运行到当前指定行号：%1").arg(requestedLine);
+}
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -113,12 +135,42 @@ int MainWindow::stopFlagValue()
    return std::atomic_load(&stop_flag);
 }
 
+QScriptEngine::RunToLineInfo MainWindow::resolveRunToLineRequest(int requestedLine)
+{
+    QScriptEngine engine;
+
+#ifdef QUICKJS_NG
+    QList<QScriptEngine::ModuleExport> exports;
+    exports << QScriptEngine::ModuleExport("int32", 42, QScriptEngine::ModuleExport::Int32);
+    exports << QScriptEngine::ModuleExport("int64", (int64_t)666, QScriptEngine::ModuleExport::Int64);
+    exports << QScriptEngine::ModuleExport("double", 1.234, QScriptEngine::ModuleExport::Double);
+    exports << QScriptEngine::ModuleExport("str", QString("这是模块字符串属性"), QScriptEngine::ModuleExport::String);
+
+    QScriptValue obj = engine.newObject();
+    obj.setProperty("str", "这是对象字符串属性");
+    exports << QScriptEngine::ModuleExport("obj", QVariant::fromValue(obj), QScriptEngine::ModuleExport::Object);
+    exports << QScriptEngine::ModuleExport("Print",
+                                           QScriptEngine::ModuleExport::Function,
+                                           engine.newFunction(funcLog, this), 1);
+    engine.registerModule("m", exports);
+#endif
+
+    return engine.resolveRunToLine(codeEditor->getSourceCode(), JS_FILE_NAME, requestedLine);
+}
+
 void MainWindow::on_pushButton_start_clicked()
 {
+    if(!mStartUsesExistingRunToLineRequest)
+    {
+        mRequestedRunToLine = 0;
+    }
+    mStartUsesExistingRunToLineRequest = false;
+
     // ▶️ ⏸️
     if(mEngine.isNull())
     {
         std::atomic_store(&stop_flag, 0);
+        mScriptThreadRunning = true;
 
         ui->pushButton_start->setVisible(false);
         ui->pushButton_stop->setVisible(true);
@@ -129,6 +181,10 @@ void MainWindow::on_pushButton_start_clicked()
         ui->plainTextEdit->clear();
         codeEditor->clearExecutionArrow();
         codeEditor->clearAnnotations();
+
+        // 先把本次执行需要的输入固化到成员里，后台线程再按快照读取
+        mActiveRequestedRunToLine = mRequestedRunToLine;
+        mActiveScriptSource = codeEditor->getSourceCode();
 
         // 启动
         auto functor = [&](){
@@ -191,9 +247,6 @@ void MainWindow::on_pushButton_start_clicked()
             engine.globalObject().setProperty("qObj", jsQObj);
 
 
-            // QString scriptStr = codeEditor->toPlainText(); // 这样取得的是包含了annotation的全部文本
-            QString scriptStr = codeEditor->getSourceCode(); // 这样只取得源码
-
 #ifdef QUICKJS_NG
             // 配置模块属性
             QList<QScriptEngine::ModuleExport> exports;
@@ -216,7 +269,7 @@ void MainWindow::on_pushButton_start_clicked()
             engine.registerModule("m", exports);
 #endif
 
-            auto chkRet = engine.checkSyntax(scriptStr);
+            auto chkRet = engine.checkSyntax(mActiveScriptSource);
             qDebug() << "check result:"
                      << chkRet.isValid()
                      << chkRet.errorLineNumber()
@@ -230,12 +283,59 @@ void MainWindow::on_pushButton_start_clicked()
             }
             else
             {
-                QScriptValue result;
-                result = engine.evaluate(scriptStr, JS_FILE_NAME, 0);
-                qDebug() << "script result:" << result.toString();
-                if(result.isError())
+                bool shouldEvaluate = true;
+                if(mActiveRequestedRunToLine > 0)
                 {
-                    handleLog(result.toString());
+                    // 启动前先解析一次目标行，避免在线程里直接跑到无效位置
+                    auto runToLineInfo = engine.resolveRunToLine(mActiveScriptSource,
+                                                                 JS_FILE_NAME,
+                                                                 mActiveRequestedRunToLine);
+                    if(runToLineInfo.enabled == false)
+                    {
+                        shouldEvaluate = false;
+                        engine.clearRunToLineInfo();
+                        engineAgent.clearRunToLine();
+
+                        const QString warningText = runToLineInfo.warningText.isEmpty()
+                                                        ? runToLineWarningText(mActiveRequestedRunToLine)
+                                                        : runToLineInfo.warningText;
+                        QMetaObject::invokeMethod(this, [=](){
+                            QMessageBox::warning(this, runToLineHintTitle(), warningText);
+                        }, Qt::QueuedConnection);
+                    }
+                    else
+                    {
+                        if(runToLineInfo.warningText.isEmpty() == false)
+                        {
+                            const QString warningText = runToLineInfo.warningText;
+                            QMetaObject::invokeMethod(this, [=](){
+                                QMessageBox::warning(this, runToLineHintTitle(), warningText);
+                            }, Qt::QueuedConnection);
+                        }
+
+                        // 运行到指定行的初始暂停点由 engine/agent 协同控制
+                        engine.setRunToLineInfo(runToLineInfo);
+                        engineAgent.configureRunToLine(true,
+                                                       runToLineInfo.requestedLine,
+                                                       runToLineInfo.resolvedLine,
+                                                       runToLineInfo.warningText);
+                    }
+                }
+                else
+                {
+                    engine.clearRunToLineInfo();
+                    engineAgent.clearRunToLine();
+                }
+
+                QScriptValue result;
+                if(shouldEvaluate)
+                {
+                    result = engine.evaluate(mActiveScriptSource, JS_FILE_NAME, 0);
+                    qDebug() << "script result:" << result.toString();
+                    if(result.isError())
+                    {
+                        handleLog(result.toString());
+                    }
                 }
             }
 
@@ -255,14 +355,25 @@ void MainWindow::on_pushButton_start_clicked()
             // delete barPrototypeObject;
             // barPrototypeObject = nullptr;
 
-            QMetaObject::invokeMethod(this, [=](){
+            QMetaObject::invokeMethod(this, [this](){
                 // on_pushButton_stop_clicked();    // 脚本暂停后再点击停止，似乎会重复调用
+                mScriptThreadRunning = false;
+                mActiveRequestedRunToLine = 0;
+                mActiveScriptSource.clear();
                 ui->pushButton_start->setVisible(true);
                 ui->pushButton_stop->setVisible(false);
                 ui->pushButton_stepIn->setVisible(false);
                 ui->pushButton_stepOut->setVisible(false);
                 ui->pushButton_stepOver->setVisible(false);
                 ui->pushButton_continue->setVisible(false);
+
+                if(mPendingRestartRunToLine >= 0)
+                {
+                    mRequestedRunToLine = mPendingRestartRunToLine;
+                    mPendingRestartRunToLine = -1;
+                    mStartUsesExistingRunToLineRequest = true;
+                    on_pushButton_start_clicked();
+                }
             }, Qt::QueuedConnection);
         };
         QtConcurrent::run(functor);
@@ -442,6 +553,49 @@ void MainWindow::on_pushButton_continue_clicked()
     {
         mEngineAgent->continueExecution();
     }
+}
+
+void MainWindow::on_pushButton_runToLine_clicked()
+{
+    bool ok = false;
+    // 输入 0 时直接退化为普通启动，其余值按 run-to-line 处理
+    int requestedLine = QInputDialog::getInt(this,
+                                             runToLineDialogTitle(),
+                                             runToLineDialogLabel(),
+                                             0,
+                                             0,
+                                             INT_MAX,
+                                             1,
+                                             &ok);
+    if(!ok)
+    {
+        return;
+    }
+
+    if(requestedLine > 0)
+    {
+        auto runToLineInfo = resolveRunToLineRequest(requestedLine);
+        if(runToLineInfo.enabled == false)
+        {
+            const QString warningText = runToLineInfo.warningText.isEmpty()
+                                            ? runToLineWarningText(requestedLine)
+                                            : runToLineInfo.warningText;
+            QMessageBox::warning(this, runToLineHintTitle(), warningText);
+            return;
+        }
+    }
+
+    if(mScriptThreadRunning || mEngine.isNull() == false)
+    {
+        // 暂停态或运行态下重新发起时，先停掉旧引擎，再自动重启
+        mPendingRestartRunToLine = requestedLine;
+        on_pushButton_stop_clicked();
+        return;
+    }
+
+    mRequestedRunToLine = requestedLine;
+    mStartUsesExistingRunToLineRequest = true;
+    on_pushButton_start_clicked();
 }
 
 void MainWindow::on_pushButton_loadDefault_clicked()

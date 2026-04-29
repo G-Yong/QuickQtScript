@@ -24,6 +24,8 @@ public:
     virtual void functionEntry(qint64 scriptId);
     virtual void functionExit(qint64 scriptId, const QScriptValue &returnValue);
     virtual void positionChange(qint64 scriptId, int lineNumber, int columnNumber);
+    // 仅在 run-to-line 的目标函数帧真正命中目标行时触发
+    virtual void runToLineTargetReached(qint64 scriptId, int lineNumber, int columnNumber);
     virtual void scriptLoad(qint64 id, const QString &program, const QString &fileName, int baseLineNumber);
     virtual void scriptUnload(qint64 id);
     // virtual bool supportsExtension(QScriptEngineAgent::Extension extension) const;

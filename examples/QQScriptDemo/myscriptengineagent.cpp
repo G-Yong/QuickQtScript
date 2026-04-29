@@ -75,6 +75,21 @@ void MyScriptEngineAgent::positionChange(qint64 scriptId, int lineNumber, int co
     }
 }
 
+void MyScriptEngineAgent::runToLineTargetReached(qint64 scriptId, int lineNumber, int columnNumber)
+{
+    Q_UNUSED(scriptId)
+    Q_UNUSED(lineNumber)
+    Q_UNUSED(columnNumber)
+
+    QMutexLocker locker(&m_mutex);
+    if (m_runToLineEnabled && m_runToLineAwaitingTarget) {
+        // 这里只负责“允许下一次 positionChange 真正停住”，
+        // 这样可以保证先由 quickjs引擎 确认命中了正确的函数帧
+        m_runToLineAwaitingTarget = false;
+        m_runToLineInitialStopPending = true;
+    }
+}
+
 void MyScriptEngineAgent::exceptionThrow(qint64 scriptId, const QScriptValue &exception, bool hasHandler)
 {
     auto curCtx = engine()->currentContext();
@@ -200,6 +215,30 @@ void MyScriptEngineAgent::pause()
     qDebug() << "暂停执行";
 }
 
+void MyScriptEngineAgent::configureRunToLine(bool enabled, int requestedLine,
+                                             int resolvedLine,
+                                             const QString &warningText)
+{
+    QMutexLocker locker(&m_mutex);
+    m_runToLineEnabled = enabled;
+    m_runToLineRequestedLine = requestedLine;
+    m_runToLineResolvedLine = resolvedLine;
+    m_runToLineAwaitingTarget = enabled && resolvedLine > 0;
+    m_runToLineInitialStopPending = false;
+    m_runToLineWarningText = warningText;
+}
+
+void MyScriptEngineAgent::clearRunToLine()
+{
+    QMutexLocker locker(&m_mutex);
+    m_runToLineEnabled = false;
+    m_runToLineRequestedLine = 0;
+    m_runToLineResolvedLine = 0;
+    m_runToLineAwaitingTarget = false;
+    m_runToLineInitialStopPending = false;
+    m_runToLineWarningText.clear();
+}
+
 void MyScriptEngineAgent::stopDebugging()
 {
     setDebugMode(NoDebug);
@@ -218,6 +257,14 @@ int MyScriptEngineAgent::currentDepth()
 bool MyScriptEngineAgent::shouldPauseAtPosition(qint64 scriptId, int lineNumber, int columnNumber)
 {
     QMutexLocker locker(&m_mutex);
+
+    // run-to-line 会话只在首次命中解析后的目标行时强制暂停一次
+    if (m_runToLineEnabled && m_runToLineInitialStopPending &&
+        lineNumber == m_runToLineResolvedLine) {
+        m_runToLineAwaitingTarget = false;
+        m_runToLineInitialStopPending = false;
+        return true;
+    }
 
     // 不在调试模式，不暂停
     if (m_debugMode == NoDebug) {

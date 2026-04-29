@@ -65,6 +65,11 @@ void QScriptEngineAgent::positionChange(qint64 scriptId, int lineNumber, int col
     // qDebug() << "position changed:" << scriptId << lineNumber << columnNumber;
 }
 
+void QScriptEngineAgent::runToLineTargetReached(qint64 scriptId, int lineNumber, int columnNumber)
+{
+
+}
+
 void QScriptEngineAgent::scriptLoad(qint64 id, const QString &program, const QString &fileName, int baseLineNumber)
 {
     // qDebug() << "script load:" << id << fileName;

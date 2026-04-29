@@ -62,6 +62,8 @@ public:
 
     virtual void positionChange(qint64 scriptId,
                                 int lineNumber, int columnNumber);
+    virtual void runToLineTargetReached(qint64 scriptId,
+                                        int lineNumber, int columnNumber);
 
     virtual void exceptionThrow(qint64 scriptId,
                                 const QScriptValue &exception,
@@ -96,6 +98,12 @@ public:
     void stepOver();               // 单步跳过
     void stepOut();                // 单步跳出
     void pause();                  // 暂停执行
+    // 配置一次 run-to-line 会话的首个暂停点
+    void configureRunToLine(bool enabled, int requestedLine,
+                            int resolvedLine,
+                            const QString &warningText = QString());
+    // 清空 run-to-line 会话状态，恢复普通调试逻辑
+    void clearRunToLine();
     void stopDebugging();
 
     // 获取当前状态
@@ -129,6 +137,14 @@ private:
     QMutex m_mutex;
     QWaitCondition m_waitCondition;
     bool m_paused;
+
+    // 下面这组状态只负责“首次命中目标行前”的快进控制
+    bool m_runToLineEnabled{false};
+    int m_runToLineRequestedLine{0};
+    int m_runToLineResolvedLine{0};
+    bool m_runToLineAwaitingTarget{false};
+    bool m_runToLineInitialStopPending{false};
+    QString m_runToLineWarningText;
 
 };
 

@@ -163,6 +163,12 @@ static bool detectModuleSyntax(const QByteArray &code)
     return false;
 }
 
+// 显示无法运行到当前行号的具体信息
+static QString runToLineWarningText(int requestedLine)
+{
+    return QString::fromWCharArray(L"无法运行到当前指定行号：%1").arg(requestedLine);
+}
+
 // 异步处理回调函数
 void QScriptEngine::promiseRejectionTracker(JSContext *ctx, JSValueConst promise,
                              JSValueConst reason,
@@ -607,6 +613,10 @@ static int scriptDebugTrace(
         // 不能每次都调用，要行列号变化才调用
         if(agent->isPosChanged(line, col))
         {
+            // 先判断是不是命中了指定行号
+            if (JS_RunToLineReached(ctx, line)) {
+                agent->runToLineTargetReached(scriptId, line, col);
+            }
             // qDebug() << "script id:" << scriptId << fileName << line << col;
             agent->positionChange(scriptId, line, col);
         }
@@ -910,6 +920,121 @@ QScriptContext *QScriptEngine::currentContext() const
     return mCurCtx;
 }
 
+QScriptEngine::RunToLineInfo QScriptEngine::resolveRunToLine(const QString &program,
+                                                             const QString &fileName,
+                                                             int requestedLine)
+{
+    RunToLineInfo info;
+    info.enabled = false;
+    info.requestedLine = requestedLine;
+    if (!m_ctx || requestedLine <= 0)
+        return info;
+
+    QByteArray ba = program.toUtf8();
+    QByteArray fnba = fileName.toUtf8();
+    const char *fn = fileName.isEmpty() ? "<eval>" : fnba.constData();
+
+    JSEvalOptions options = {};
+    options.version = JS_EVAL_OPTIONS_VERSION;
+    options.eval_flags = detectModuleSyntax(ba) ? JS_EVAL_TYPE_MODULE : JS_EVAL_TYPE_GLOBAL;
+    options.eval_flags |= JS_EVAL_FLAG_COMPILE_ONLY;
+    options.filename = fn;
+    options.line_num = 1;
+
+    JSValue compiled = JS_Eval2RunToLineCompile(m_ctx,
+                                                ba.constData(),
+                                                ba.size(),
+                                                &options,
+                                                requestedLine,
+                                                0);
+    if (JS_IsException(compiled)) {
+        JSValue exception = JS_GetException(m_ctx);
+        info.warningText = QScriptValue(m_ctx, exception, const_cast<QScriptEngine*>(this)).toString();
+        JS_FreeValue(m_ctx, exception);
+        return info;
+    }
+
+    JSRunToLineResolveResult result = {};
+    if (JS_ResolveRunToLine(m_ctx, compiled, requestedLine, &result) == 0 &&
+        result.resolved_line > 0) {
+        info.enabled = true;
+        info.resolvedLine = result.resolved_line;
+        info.exactMatch = (result.exact_match != 0);
+        info.inNestedFunction = (result.in_nested_function != 0);
+        if (!info.exactMatch) {
+            info.warningText = runToLineWarningText(requestedLine);
+        }
+    } else {
+        info.warningText = runToLineWarningText(requestedLine);
+    }
+
+    JS_FreeValue(m_ctx, compiled);
+    return info;
+}
+
+void QScriptEngine::setRunToLineInfo(const RunToLineInfo &info)
+{
+    m_runToLineInfo = info;
+}
+
+void QScriptEngine::clearRunToLineInfo()
+{
+    m_runToLineInfo = RunToLineInfo();
+}
+
+JSValue QScriptEngine::evaluateRunToLine(const QString &program,
+                                         const QString &fileName,
+                                         int lineNumber,
+                                         bool isModule,
+                                         const RunToLineInfo &info)
+{
+    QByteArray ba = program.toUtf8();
+    QByteArray fnba = fileName.toUtf8();
+    const char *fn = fileName.isEmpty() ? "<eval>" : fnba.constData();
+
+    JSEvalOptions compileOptions = {};
+    compileOptions.version = JS_EVAL_OPTIONS_VERSION;
+    compileOptions.eval_flags = isModule ? JS_EVAL_TYPE_MODULE : JS_EVAL_TYPE_GLOBAL;
+    compileOptions.eval_flags |= JS_EVAL_FLAG_COMPILE_ONLY;
+    compileOptions.filename = fn;
+    compileOptions.line_num = (lineNumber > 0) ? lineNumber : 1;
+
+    JSValue compiled = JS_Eval2RunToLineCompile(m_ctx,
+                                                ba.constData(),
+                                                ba.size(),
+                                                &compileOptions,
+                                                info.requestedLine,
+                                                info.resolvedLine);
+    if (JS_IsException(compiled))
+        return compiled;
+
+    JSRunToLineResolveResult result = {};
+    if (JS_ResolveRunToLine(m_ctx, compiled, info.requestedLine, &result) < 0 ||
+        result.resolved_line <= 0) {
+        JS_FreeValue(m_ctx, compiled);
+        JS_ThrowInternalError(m_ctx, "run-to-line target is unavailable");
+        return JS_EXCEPTION;
+    }
+
+    JSValue targetFunction = JS_GetRunToLineFunction(m_ctx, compiled, result.resolved_line);
+    if (JS_EnableRunToLine(m_ctx, compiled, targetFunction,
+                           info.requestedLine, result.resolved_line) < 0) {
+        JS_FreeValue(m_ctx, targetFunction);
+        JS_FreeValue(m_ctx, compiled);
+        JS_ThrowInternalError(m_ctx, "run-to-line setup failed");
+        return JS_EXCEPTION;
+    }
+
+    // 让根脚本正常快进到真实调用点
+    // 这样在函数体里停住后，后续单步才能自然回到原始调用行继续执行
+    JSValue val = JS_EvalFunction(m_ctx, JS_DupValue(m_ctx, compiled));
+
+    JS_ClearRunToLine(m_ctx);
+    JS_FreeValue(m_ctx, targetFunction);
+    JS_FreeValue(m_ctx, compiled);
+    return val;
+}
+
 QScriptValue QScriptEngine::evaluate(const QString &program, const QString &fileName, int lineNumber)
 {
     if (!m_ctx)
@@ -940,9 +1065,11 @@ QScriptValue QScriptEngine::evaluate(const QString &program, const QString &file
     QByteArray fnba = fileName.toUtf8();
     const char *fn  = fileName.isEmpty() ? "<eval>" : fnba.constData();
     JSValue val;
+    RunToLineInfo runToLineInfo = m_runToLineInfo;
+    clearRunToLineInfo();
 
     // 使用带有flag的eval调用函数
-    JSEvalOptions options;
+    JSEvalOptions options = {};
     options.version    = JS_EVAL_OPTIONS_VERSION;
     bool isModule;
     // isModule = JS_DetectModule(ba.constData(), ba.size()); // 等待官方完善 JS_DetectModule
@@ -955,7 +1082,12 @@ QScriptValue QScriptEngine::evaluate(const QString &program, const QString &file
     // 这是加载外部的模块（js实现）
     // JS_SetModuleLoaderFunc(m_rt, nullptr, js_module_loader_qt, nullptr);
 
-    val = JS_Eval2(m_ctx, ba.constData(), ba.size(), &options);
+    // 判断是否开启指定行运行功能
+    if (runToLineInfo.enabled && runToLineInfo.requestedLine > 0) {
+        val = evaluateRunToLine(program, fileName, lineNumber, isModule, runToLineInfo);
+    } else {
+        val = JS_Eval2(m_ctx, ba.constData(), ba.size(), &options);
+    }
     // 如果是JS_EVAL_TYPE_GLOBAL执行脚本, 发生错误时val会直接返回异常，所以不会进入下面的判断
 //     if (!JS_IsException(val))
 //     {

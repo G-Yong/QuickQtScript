@@ -92,6 +92,16 @@
           </property>
          </widget>
         </item>
+        <item>
+         <widget class="QPushButton" name="pushButton_runToLine">
+          <property name="styleSheet">
+           <string notr="true">font: 12pt &quot;Microsoft YaHei UI&quot;;</string>
+          </property>
+          <property name="text">
+           <string>Run To Line</string>
+          </property>
+         </widget>
+        </item>
         <!-- reset button removed -->
         <item>
          <widget class="QPushButton" name="pushButton_loadDefault">
