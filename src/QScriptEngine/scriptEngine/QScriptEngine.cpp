@@ -554,10 +554,10 @@ static int scriptDebugTrace(
     const char *fileName,
     const char *funcName,
     int line,
-    int col
+    int col,
+    void *opaque
     )
 {
-    void *opaque = JS_GetContextOpaque(ctx);
     QScriptEngine *engine = static_cast<QScriptEngine*>(opaque);
     if (!engine)
         return 0;
@@ -727,7 +727,6 @@ QScriptEngine::QScriptEngine(QObject *parent)
 #ifdef USE_LIBC
     js_std_set_worker_new_context_func(JS_NewCustomContext);
     js_std_init_handlers(m_rt);
-    // 主上下文使用 JS_NewDebugContext 创建，以支持调试回调（OP_debug 操作码）
     m_ctx = JS_NewContext(m_rt);
     JS_SetDebugTraceHandler(m_ctx, scriptDebugTrace);
     if (m_ctx) {
@@ -737,7 +736,7 @@ QScriptEngine::QScriptEngine(QObject *parent)
     }
 #else
     m_ctx = JS_NewContext(m_rt);
-    JS_SetDebugTraceHandler(m_ctx, scriptDebugTrace);
+    JS_SetDebugTraceHandler(m_ctx, scriptDebugTrace, this);
 #endif
 
     if(!m_ctx)
