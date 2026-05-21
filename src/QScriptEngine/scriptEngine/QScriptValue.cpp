@@ -928,7 +928,13 @@ static QVariant JSValueToQVariant(JSContext *ctx, JSValueConst val, QScriptEngin
         }
         if(dt.isValid() == false)
         {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+            // Qt 6 代码：使用 QLocale
+            dt = QLocale::system().toDateTime(str, QLocale::ShortFormat);
+#else
+            // Qt 5 代码：使用旧枚举
             dt = QDateTime::fromString(str, Qt::SystemLocaleDate);
+#endif
         }
         if(dt.isValid() == false)
         {

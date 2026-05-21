@@ -54,7 +54,7 @@ MainWindow::MainWindow(QWidget *parent)
     codeEditor->setExecutionArrowEnabled(true); // 显示箭头
     codeEditor->setReadOnly(false);             // 允许实时编辑脚本内容
     QHBoxLayout *codeEditorLayout = new QHBoxLayout();
-    codeEditorLayout->setMargin(0);
+    codeEditorLayout->setContentsMargins(0, 0, 0, 0);
     codeEditorLayout->addWidget(codeEditor);
     ui->widget->setLayout(codeEditorLayout);
 

@@ -129,7 +129,13 @@ void JSCodeEditor::setupEditor()
 
     // 设置制表符宽度
     QFontMetrics metrics(font);
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    // Qt 6：使用 horizontalAdvance 和 setTabStopDistance
+    setTabStopDistance(4.0 * metrics.horizontalAdvance(' '));
+#else
+    // Qt 5：使用 width 和 setTabStopWidth
     setTabStopWidth(4 * metrics.width(' '));
+#endif
 
     // 设置背景色和文字颜色
     QPalette palette = this->palette();
@@ -332,7 +338,13 @@ int JSCodeEditor::lineNumberAreaWidth()
         ++digits;
     }
 
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    // Qt 6：使用 horizontalAdvance
+    int space = 20 + fontMetrics().horizontalAdvance(QLatin1Char('9')) * digits;
+#else
+    // Qt 5
     int space = 20 + fontMetrics().width(QLatin1Char('9')) * digits;
+#endif
     return space;
 }
 

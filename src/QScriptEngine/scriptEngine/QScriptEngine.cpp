@@ -450,7 +450,13 @@ struct ObjectMethod
         bool success = false;
 
         QString var;
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+        // Qt 6 代码：Q_RETURN_ARG 返回的是 QMetaMethodReturnArgument，可以直接使用
+        QMetaMethodReturnArgument retVal = Q_RETURN_ARG(QString, var);
+#else
+        // Qt 5 代码：Q_RETURN_ARG 返回的是 QGenericReturnArgument，保持原样
         QGenericReturnArgument retVal = Q_RETURN_ARG(QString, var);
+#endif
 
         // QGenericReturnArgument retVal(method.typeName());
 
@@ -485,7 +491,13 @@ struct ObjectMethod
         // 返回值这里还有问题，不能这样返
         switch (method.returnType()) {
         case QMetaType::QString:
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+            // Qt 6
+            return *(QString*)retVal.data;
+#else
+            // Qt 5
             return *(QString*)retVal.data();
+#endif
             break;
         default:
             break;
