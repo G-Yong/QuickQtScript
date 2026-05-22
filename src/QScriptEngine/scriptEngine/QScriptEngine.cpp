@@ -563,8 +563,8 @@ static void qobject_finalizer(JSRuntime *rt, JSValueConst val)
 // 放在 QScriptEngine 层而非 QScriptEngineAgent 层，确保无论是否设置 agent 都能响应中断
 static int scriptDebugTrace(
     JSContext *ctx,
-    const char *fileName,
-    const char *funcName,
+    JSAtom fileName,
+    JSAtom funcName,
     int line,
     int col,
     void *opaque
@@ -590,7 +590,21 @@ static int scriptDebugTrace(
     if (!agent)
         return 0;
 
-    int scriptId = agent->scriptId(fileName);
+    // Convert atoms to C strings (valid only for the duration of this callback)
+    const char *fileNameStr = JS_AtomToCString(ctx, fileName);
+    const char *funcNameStr = JS_AtomToCString(ctx, funcName);
+
+    // RAII guard ensures strings are freed on all return paths
+    struct Guard {
+        JSContext *ctx;
+        const char *a, *b;
+        ~Guard() {
+            if (a) JS_FreeCString(ctx, a);
+            if (b) JS_FreeCString(ctx, b);
+        }
+    } guard{ctx, fileNameStr, funcNameStr};
+
+    int scriptId = agent->scriptId(fileNameStr ? QString::fromUtf8(fileNameStr) : QString());
 
     // 通过 JS_GetStackDepth 检测函数进入/退出
     // 栈深度增加 = 进入了新函数，栈深度减少 = 有函数返回了
