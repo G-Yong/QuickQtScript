@@ -567,6 +567,7 @@ static int scriptDebugTrace(
     JSAtom funcName,
     int line,
     int col,
+    int flags,
     void *opaque
     )
 {

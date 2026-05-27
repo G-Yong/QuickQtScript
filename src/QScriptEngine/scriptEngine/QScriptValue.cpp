@@ -1,5 +1,6 @@
 ﻿#include <QScriptValue>
 #include <QScriptEngine>
+#include <QScriptEngineAgent.h>
 
 #include <QStringList>
 #include <QDebug>
@@ -183,6 +184,24 @@ QScriptValue QScriptValue::call(const QScriptValue &thisObject, const QScriptVal
     // 包装结果并返回
     QScriptValue qResult(m_ctx, result, m_engine);
     JS_FreeValue(m_ctx, result);
+
+    // 假如是异常，需要通过agent抛出
+    if (JS_IsException(result))
+    {
+        if (m_engine && m_engine->agent())
+        {
+            // wrap exception
+            JSValue exception = JS_GetException(m_ctx);
+            QScriptValue qVal = QScriptValue(m_ctx, exception, m_engine);
+
+            // JS_GetException 之后，exception会被复位为 JS_UNINITIALIZED
+            // 因此自己再搞回去
+            JS_Throw(m_ctx, exception);
+
+            m_engine->agent()->exceptionThrow(-1, qVal, false);
+        }
+    }
+
     return qResult;
 }
 
