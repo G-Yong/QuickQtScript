@@ -327,19 +327,10 @@ void QScriptValue::setProperty(const QString &name, const QScriptValue &value, c
     if (!m_ctx)
         return;
 
-    JSValue val_to_set = JS_UNDEFINED;
-    if (value.isVariant()) {
-        val_to_set = toJSValue(m_ctx, value.data());
-    } else {
-        val_to_set = JS_DupValue(m_ctx, value.rawValue());
-        // val_to_set = value.rawValue();
-    }
-
     // compute QuickJS property attribute bits
     int qjs_flags = JS_PROP_C_W_E; // default: configurable, writable, enumerable
     JSAtom atom = JS_NewAtom(m_ctx, name.toUtf8().constData());
     if (atom == JS_ATOM_NULL) {
-        JS_FreeValue(m_ctx, val_to_set);
         return;
     }
 
@@ -364,27 +355,16 @@ void QScriptValue::setProperty(const QString &name, const QScriptValue &value, c
         JSValue getter = JS_UNDEFINED;
         JSValue setter = JS_UNDEFINED;
 
-        auto handler = JS_DupValue(m_ctx, value.rawValue());
-        // auto handler = value.rawValue();
-
-        if (flags & PropertyGetter) {
-            // use supplied value as getter function if it's a function
-            if (!value.isVariant())
+        if (!value.isVariant())
+        {
+            // QuickJS will free getter/setter separately, so each needs its own ref.
+            if (flags & PropertyGetter)
             {
-                // getter = JS_DupValue(m_ctx, value.rawValue());
-                // getter = value.rawValue();
-
-                getter = handler;
+                getter = JS_DupValue(m_ctx, value.rawValue());
             }
-            // qDebug() << "is variant:" << value.isVariant();
-        }
-        if (flags & PropertySetter) {
-            if (!value.isVariant())
+            if (flags & PropertySetter)
             {
-                // setter = JS_DupValue(m_ctx, value.rawValue());
-                // setter = value.rawValue();
-
-                setter = handler;
+                setter = JS_DupValue(m_ctx, value.rawValue());
             }
         }
 
@@ -394,6 +374,14 @@ void QScriptValue::setProperty(const QString &name, const QScriptValue &value, c
         JS_DefinePropertyGetSet(m_ctx, m_value, atom, getter, setter, qjs_flags);
         JS_FreeAtom(m_ctx, atom);
         return;
+    }
+
+    JSValue val_to_set = JS_UNDEFINED;
+    if (value.isVariant()) {
+        val_to_set = toJSValue(m_ctx, value.data());
+    } else {
+        val_to_set = JS_DupValue(m_ctx, value.rawValue());
+        // val_to_set = value.rawValue();
     }
 
     // define value property (JS_DefinePropertyValue will free val_to_set)
