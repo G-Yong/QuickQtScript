@@ -339,10 +339,15 @@ void QScriptValue::setProperty(const QString &name, const QScriptValue &value, c
         int ret = JS_GetOwnProperty(m_ctx, &desc, m_value, atom);
         if (ret > 0) {
             qjs_flags = desc.flags & JS_PROP_C_W_E;
+            // JS_GetOwnProperty() only fills desc when the property exists.
+            // Freeing desc on ret == 0 would release uninitialized JSValue data.
+            JS_FreeValue(m_ctx, desc.getter);
+            JS_FreeValue(m_ctx, desc.setter);
+            JS_FreeValue(m_ctx, desc.value);
+        } else if (ret < 0) {
+            JS_FreeAtom(m_ctx, atom);
+            return;
         }
-        JS_FreeValue(m_ctx, desc.getter);
-        JS_FreeValue(m_ctx, desc.setter);
-        JS_FreeValue(m_ctx, desc.value);
     } else {
         qjs_flags = 0;
         if (!(flags & ReadOnly))          qjs_flags |= JS_PROP_WRITABLE;
