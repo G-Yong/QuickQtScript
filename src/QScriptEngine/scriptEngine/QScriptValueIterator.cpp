@@ -159,7 +159,8 @@ static JSValue js_deep_clone(JSContext *ctx, JSValueConst this_val) {
                 }
 
                 if (JS_SetPropertyUint32(ctx, new_array, (uint32_t)i, cloned_elem) < 0) {
-                    JS_FreeValue(ctx, cloned_elem);
+                    // JS_SetPropertyUint32 takes ownership of cloned_elem even on failure.
+                    // Free only the container we still own; freeing cloned_elem again is double-free.
                     JS_FreeValue(ctx, new_array);
                     return JS_EXCEPTION;
                 }
@@ -210,7 +211,8 @@ static JSValue js_deep_clone(JSContext *ctx, JSValueConst this_val) {
             }
 
             if (JS_SetProperty(ctx, new_obj, atom, cloned_val) < 0) {
-                JS_FreeValue(ctx, cloned_val);
+                // JS_SetProperty takes ownership of cloned_val even on failure.
+                // Free only the objects still owned by this function.
                 JS_FreePropertyEnum(ctx, props, prop_count);
                 JS_FreeValue(ctx, new_obj);
                 return JS_EXCEPTION;

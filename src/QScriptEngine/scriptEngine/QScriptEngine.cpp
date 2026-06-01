@@ -19,6 +19,12 @@ extern "C" {
 #include "quickjs.h"
 }
 
+namespace {
+
+constexpr int kMaxUncaughtPromiseRejections = 64;
+
+} // namespace
+
 // 辅助函数：创建 C 函数导出项
 inline JSCFunctionListEntry JS_CFUNC_DEF_CPP(const char* name, uint8_t length, JSCFunction* func1) {
     JSCFunctionListEntry entry = {};
@@ -173,10 +179,15 @@ void QScriptEngine::promiseRejectionTracker(JSContext *ctx, JSValueConst promise
 
     if (!is_handled) {
         // 只有当没有 .catch() 时才记录为未捕获
-        // 记录对应的 reason 对象，便于 later 被 .catch() 标记为已处理时移除
+        // 记录对应的 reason 对象，便于后续被 .catch() 标记为已处理时移除
         engine->m_uncaughtPromiseRejections.append(
             QScriptValue(ctx, reason, engine)
         );
+        // 该列表只用于诊断，不能在长时间运行的引擎里无限保存 JSValue。
+        // removeFirst() 会析构 QScriptValue，从而释放最早 reason 的引用。
+        while (engine->m_uncaughtPromiseRejections.size() > kMaxUncaughtPromiseRejections) {
+            engine->m_uncaughtPromiseRejections.removeFirst();
+        }
         qDebug() << "Uncaught Promise rejection (promise stored)"
                  << engine->m_uncaughtPromiseRejections.last().toString();
     } else {
