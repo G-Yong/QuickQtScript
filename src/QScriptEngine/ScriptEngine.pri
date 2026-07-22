@@ -63,6 +63,7 @@ win32: {
     DEFINES += __TINYC__
     LIBS += -lws2_32 -liphlpapi
     DEFINES += WIN32_LEAN_AND_MEAN
+    msvc: QMAKE_CFLAGS += /FI"$$shell_path($$PWD/quickjs_msvc_compat.h)"
 } else {
     # 添加linux系统可能用到的宏定义
     DEFINES += _GNU_SOURCE
