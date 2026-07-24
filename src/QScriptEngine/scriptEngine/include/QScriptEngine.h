@@ -161,7 +161,7 @@ public:
     JSContext *ctx() const { return m_ctx; }
 
     // 中断标志，用于打断执行
-    std::atomic_int interrupt_flag = 0;
+    std::atomic_int interrupt_flag{0};
 
     QStringList fileNameBuffer(){
         return mFileNameBuffer;
