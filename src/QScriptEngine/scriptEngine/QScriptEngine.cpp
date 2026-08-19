@@ -557,9 +557,6 @@ static void qobject_finalizer(JSRuntime *rt, JSValueConst val)
 
 namespace {
 
-// 所有 QScriptEngine 共用一个进程级计数器，保证不同执行线程并发创建时 ID 仍不重复
-std::atomic<quint64> nextEngineInstanceId{1};
-
 // QuickJS 在控制流字节码达到轮询次数后调用此函数
 // 高频路径只执行原子操作，不能在这里发信号、记录日志或访问 Qt 容器
 static int custom_interrupt_handler(JSRuntime *rt, void *opaque)
@@ -755,8 +752,7 @@ QScriptEngine::QScriptEngine(QObject *parent)
 {
     qRegisterMetaType<QScriptValue>();
 
-    quint64 id = nextEngineInstanceId.fetch_add(1, std::memory_order_relaxed);
-    m_heartbeatState.reset(new HeartbeatState(id));
+    m_heartbeatState.reset(new HeartbeatState);
 
     m_rt = JS_NewRuntime();
     if(!m_rt)
@@ -933,11 +929,6 @@ void QScriptEngine::abortEvaluation(const QScriptValue &result)
     // JS_Throw(m_ctx, JS_DupValue(m_ctx, result.rawValue()));
 
     std::atomic_store(&interrupt_flag, 1);
-}
-
-quint64 QScriptEngine::engineInstanceId() const
-{
-    return m_heartbeatState->engineInstanceId;
 }
 
 quint64 QScriptEngine::executionRevision() const

@@ -50,13 +50,8 @@ public:
     };
     Q_DECLARE_FLAGS(QObjectWrapOptions, QObjectWrapOption)
 public:
+    // 状态由QSharedPointer管理，调用方可使用heartbeatState().data()作为存活期内的实例键
     struct HeartbeatState {
-        explicit HeartbeatState(quint64 id)
-            : engineInstanceId(id)
-        {
-        }
-
-        const quint64 engineInstanceId;
         std::atomic<quint64> revision{0};
         std::atomic_bool paused{false};
     };
@@ -67,8 +62,6 @@ public:
     bool isEvaluating() const;
     void abortEvaluation(const QScriptValue &result = QScriptValue());
 
-    // ID 在当前后端进程生命周期内唯一，用于区分并发执行的引擎实例
-    quint64 engineInstanceId() const;
     quint64 executionRevision() const;
     void advanceExecutionRevision();
     void setExecutionPaused(bool paused);
