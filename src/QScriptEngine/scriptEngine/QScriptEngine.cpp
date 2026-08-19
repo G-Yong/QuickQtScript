@@ -555,20 +555,26 @@ static void qobject_finalizer(JSRuntime *rt, JSValueConst val)
 // 不然就会出现 资源未释放/资源重复释放的问题
 
 
-// // 中断函数，用于实现 abortEval
-// static int custom_interrupt_handler(JSRuntime *rt, void *opaque) {
-//     QScriptEngine *engine = static_cast<QScriptEngine*>(opaque);
-//     if (!engine)
-//         return 1;
+namespace {
 
-//     // 检查中断标志
-//     if (std::atomic_load(&engine->interrupt_flag)) {
-//         // 可以在这里进行清理
-//         qDebug() << "Interrupting script execution" << QDateTime::currentDateTime();
-//         return 1;  // 返回1表示请求中断
-//     }
-//     return 0;
-// }
+// 所有 QScriptEngine 共用一个进程级计数器，保证不同执行线程并发创建时 ID 仍不重复
+std::atomic<quint64> nextEngineInstanceId{1};
+
+// QuickJS 在控制流字节码达到轮询次数后调用此函数
+// 高频路径只执行原子操作，不能在这里发信号、记录日志或访问 Qt 容器
+static int custom_interrupt_handler(JSRuntime *rt, void *opaque)
+{
+    Q_UNUSED(rt)
+
+    QScriptEngine *engine = static_cast<QScriptEngine*>(opaque);
+    if (!engine)
+        return 1;
+
+    engine->advanceExecutionRevision();
+    return std::atomic_load(&engine->interrupt_flag) ? 1 : 0;
+}
+
+}
 
 // 调试断点回调，在语句边界触发（OP_debug 指令）
 // 放在 QScriptEngine 层而非 QScriptEngineAgent 层，确保无论是否设置 agent 都能响应中断
@@ -749,6 +755,9 @@ QScriptEngine::QScriptEngine(QObject *parent)
 {
     qRegisterMetaType<QScriptValue>();
 
+    quint64 id = nextEngineInstanceId.fetch_add(1, std::memory_order_relaxed);
+    m_heartbeatState.reset(new HeartbeatState(id));
+
     m_rt = JS_NewRuntime();
     if(!m_rt)
     {
@@ -790,8 +799,9 @@ QScriptEngine::QScriptEngine(QObject *parent)
 
     // 重置中断标志
     std::atomic_store(&interrupt_flag, 0);
-    // // 设置中断处理器
-    // JS_SetInterruptHandler(m_rt, custom_interrupt_handler, this);
+    // 原生中断处理器覆盖没有 OP_debug 的纯 while/for 循环
+    // abortEvaluation 只负责设置原子标志，QuickJS 在自身执行线程轮询并安全退出
+    JS_SetInterruptHandler(m_rt, custom_interrupt_handler, this);
 
     // 这样是实现对QObject对象的析构
     // Register a QuickJS class to wrap QObject pointers
@@ -923,6 +933,34 @@ void QScriptEngine::abortEvaluation(const QScriptValue &result)
     // JS_Throw(m_ctx, JS_DupValue(m_ctx, result.rawValue()));
 
     std::atomic_store(&interrupt_flag, 1);
+}
+
+quint64 QScriptEngine::engineInstanceId() const
+{
+    return m_heartbeatState->engineInstanceId;
+}
+
+quint64 QScriptEngine::executionRevision() const
+{
+    return m_heartbeatState->revision.load(std::memory_order_relaxed);
+}
+
+void QScriptEngine::advanceExecutionRevision()
+{
+    if(m_heartbeatState->paused.load(std::memory_order_relaxed) == false)
+    {
+        m_heartbeatState->revision.fetch_add(1, std::memory_order_relaxed);
+    }
+}
+
+void QScriptEngine::setExecutionPaused(bool paused)
+{
+    m_heartbeatState->paused.store(paused, std::memory_order_relaxed);
+}
+
+QSharedPointer<QScriptEngine::HeartbeatState> QScriptEngine::heartbeatState() const
+{
+    return m_heartbeatState;
 }
 
 void QScriptEngine::setAgent(QScriptEngineAgent *agent)

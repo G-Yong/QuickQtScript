@@ -7,6 +7,7 @@
 #include <QSet>
 #include <QMutex>
 #include <QDebug>
+#include <QSharedPointer>
 
 #include <atomic>
 #include <vector>
@@ -49,11 +50,29 @@ public:
     };
     Q_DECLARE_FLAGS(QObjectWrapOptions, QObjectWrapOption)
 public:
+    struct HeartbeatState {
+        explicit HeartbeatState(quint64 id)
+            : engineInstanceId(id)
+        {
+        }
+
+        const quint64 engineInstanceId;
+        std::atomic<quint64> revision{0};
+        std::atomic_bool paused{false};
+    };
+
     explicit QScriptEngine(QObject *parent = nullptr);
     ~QScriptEngine();
 
     bool isEvaluating() const;
     void abortEvaluation(const QScriptValue &result = QScriptValue());
+
+    // ID 在当前后端进程生命周期内唯一，用于区分并发执行的引擎实例
+    quint64 engineInstanceId() const;
+    quint64 executionRevision() const;
+    void advanceExecutionRevision();
+    void setExecutionPaused(bool paused);
+    QSharedPointer<HeartbeatState> heartbeatState() const;
 
     void setAgent(QScriptEngineAgent *agent);
     QScriptEngineAgent *agent() const;
@@ -207,6 +226,7 @@ private:
     QScriptContext *mCurCtx{nullptr};     // 还未实现
     QScriptValue *mGlobalObject{nullptr};
     QHash<int, QScriptValue> m_defaultPrototypes;
+    QSharedPointer<HeartbeatState> m_heartbeatState;
 };
 
 
