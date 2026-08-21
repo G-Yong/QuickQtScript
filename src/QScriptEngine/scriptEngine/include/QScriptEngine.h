@@ -7,6 +7,7 @@
 #include <QSet>
 #include <QMutex>
 #include <QDebug>
+#include <QSharedPointer>
 
 #include <atomic>
 #include <vector>
@@ -49,11 +50,22 @@ public:
     };
     Q_DECLARE_FLAGS(QObjectWrapOptions, QObjectWrapOption)
 public:
+    // 状态由QSharedPointer管理，调用方可使用heartbeatState().data()作为存活期内的实例键
+    struct HeartbeatState {
+        std::atomic<quint64> revision{0};
+        std::atomic_bool paused{false};
+    };
+
     explicit QScriptEngine(QObject *parent = nullptr);
     ~QScriptEngine();
 
     bool isEvaluating() const;
     void abortEvaluation(const QScriptValue &result = QScriptValue());
+
+    quint64 executionRevision() const;
+    void advanceExecutionRevision();
+    void setExecutionPaused(bool paused);
+    QSharedPointer<HeartbeatState> heartbeatState() const;
 
     void setAgent(QScriptEngineAgent *agent);
     QScriptEngineAgent *agent() const;
@@ -207,6 +219,7 @@ private:
     QScriptContext *mCurCtx{nullptr};     // 还未实现
     QScriptValue *mGlobalObject{nullptr};
     QHash<int, QScriptValue> m_defaultPrototypes;
+    QSharedPointer<HeartbeatState> m_heartbeatState;
 };
 
 
