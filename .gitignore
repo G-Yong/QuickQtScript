@@ -163,3 +163,7 @@ CMakeLists.txt.user*
 *build*/
 
 .vscode/
+
+src/QScriptEngine/build
+
+src/QQScriptDemo/build

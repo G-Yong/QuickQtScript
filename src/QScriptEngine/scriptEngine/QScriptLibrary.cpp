@@ -24,7 +24,7 @@
  * THE SOFTWARE.
  */
 #include <QDebug>
-#include <QApplication>
+#include <QCoreApplication>
 #include <QScriptEngine.h>
 #include <QScriptEngineAgent.h>
 #include "quickjs.h"
