@@ -69,12 +69,27 @@ public:
 
     void setAgent(QScriptEngineAgent *agent);
     QScriptEngineAgent *agent() const;
+    // 耗时 native 函数在安全的循环边界调用此接口，协作响应暂停请求。
+    // 普通 JavaScript 语句由 OP_debug 回调暂停，不需要显式调用。
+    void pauseCheckpoint();
 
     void collectGarbage();
 
     QScriptContext *currentContext() const;
 
     QScriptValue evaluate(const QString &program, const QString &fileName = QString(), int lineNumber = 1);
+
+    // 启动前解析 run-to-line 请求
+    struct RunToLineInfo {
+        bool enabled = false;
+        int resolvedLine = 0;
+        QString warningText;
+    };
+    RunToLineInfo resolveRunToLine(const QString &program,
+                                   const QString &fileName,
+                                   int requestedLine);
+    void setRunToLineInfo(const RunToLineInfo &info);
+    void clearRunToLineInfo();
 
     QScriptValue globalObject() const;
     void setGlobalObject(const QScriptValue &object);
@@ -196,6 +211,12 @@ private:
     static void promiseRejectionTracker(JSContext *ctx, JSValueConst promise,
                                         JSValueConst reason,
                                         bool is_handled, void *opaque); // 处理异步 reject 的回调函数
+    // run-to-line 的真正执行入口：根脚本照常运行，只改变快进阶段的调试语义
+    JSValue evaluateRunToLine(const QString &program,
+                              const QString &fileName,
+                              int lineNumber,
+                              bool isModule,
+                              const RunToLineInfo &info);
     mutable QList<QScriptValue> m_uncaughtPromiseRejections;  // 存储所有未处理的 reject
     void clearUncaughtPromiseRejections();  // 清空所有未处理的 reject
     JSValue awaitPromise(JSValue promise, bool isModule = false);  // 等待异步promise处理函数
@@ -220,6 +241,8 @@ private:
     QScriptValue *mGlobalObject{nullptr};
     QHash<int, QScriptValue> m_defaultPrototypes;
     QSharedPointer<HeartbeatState> m_heartbeatState;
+    // 只对下一次 evaluate 生效，调用后立即清空
+    RunToLineInfo m_runToLineInfo;
 };
 
 

@@ -163,3 +163,7 @@ CMakeLists.txt.user*
 *build*/
 
 .vscode/
+
+*.md
+
+!README.md
