@@ -589,6 +589,10 @@ static int scriptDebugTrace(
     if (!engine)
         return 0;
 
+    // 记录当前语句位置（供 uncaughtExceptionLineNumber() 使用）。
+    // 必须在 agent 判空之前，保证没设置 agent 时也能拿到行号。
+    engine->setCurrentPosition(line, col);
+
     // 检查中断标志，实现零延迟终止
     // 与 QuickJS 内部 JS_ThrowInterrupted 使用相同的模式：
     // 抛出不可捕获的 InternalError，使 try/catch 无法拦截
@@ -1001,6 +1005,7 @@ QScriptValue QScriptEngine::evaluate(const QString &program, const QString &file
     // 中断标志位复位
     std::atomic_store(&interrupt_flag, 0);
     clearUncaughtPromiseRejections(); // 清除未处理的reject
+    setCurrentPosition(-1, -1);       // 复位上一次 eval 记录的位置
 
     QByteArray ba   = program.toUtf8();
     QByteArray fnba = fileName.toUtf8();
@@ -1675,14 +1680,66 @@ QScriptValue QScriptEngine::uncaughtException() const
     return qVal;
 }
 
+// 从 QuickJS 的 stack 字符串里取第一个带行号的栈帧行号。
+// 形如 "    at Main (t.js:3:5)"、"    at <eval> (t.js:5)"；
+// 原生函数帧是 "at native (native)"，没有行号，跳过。
+static int parseStackLine(const QString &stack)
+{
+    const QStringList lines = stack.split(QLatin1Char('\n'));
+    for (const QString &raw : lines) {
+        QString s = raw.trimmed();
+        if (s.isEmpty())
+            continue;
+        const int lp = s.lastIndexOf(QLatin1Char('('));
+        const int rp = s.lastIndexOf(QLatin1Char(')'));
+        if (lp >= 0 && rp > lp)
+            s = s.mid(lp + 1, rp - lp - 1);
+        else if (s.startsWith(QLatin1String("at ")))
+            s = s.mid(3);
+
+        const QStringList parts = s.split(QLatin1Char(':'));
+        if (parts.size() < 2)
+            continue;
+        bool ok = false;
+        const int line = parts.at(parts.size() - 2).toInt(&ok);
+        if (ok && line > 0)
+            return line;
+    }
+    return -1;
+}
+
 int QScriptEngine::uncaughtExceptionLineNumber() const
 {
-    Q_UNUSED(this);
-    return -1;
+    // 优先从异常对象的 stack 解析：QuickJS 的 stack 在抛出点生成，
+    // 即使某些语句（如成员表达式）在字节码优化后丢掉了 OP_debug 也准确。
+    // 注意要用 JS_GetException + JS_Throw 取值再放回，不能消费掉异常。
+    if (m_ctx && JS_HasException(m_ctx)) {
+        JSValue exc = JS_GetException(m_ctx);
+        JS_Throw(m_ctx, exc); // 立刻放回去，保持未捕获异常状态
+        JSValue stack = JS_GetPropertyStr(m_ctx, exc, "stack");
+        if (JS_IsString(stack)) {
+            const char *cstr = JS_ToCString(m_ctx, stack);
+            if (cstr) {
+                const int line = parseStackLine(QString::fromUtf8(cstr));
+                JS_FreeCString(m_ctx, cstr);
+                JS_FreeValue(m_ctx, stack);
+                if (line > 0)
+                    return line;
+                // stack 无行号（例如原生函数抛错）→ 走下面的回退
+                return m_currentLine;
+            }
+        }
+        JS_FreeValue(m_ctx, stack);
+    }
+
+    // 回退：scriptDebugTrace 在语句边界记录的位置。
+    return m_currentLine;
 }
 
 QStringList QScriptEngine::uncaughtExceptionBacktrace() const
 {
+    // 尚未实现：需要维护语句级调用栈。当前返回空列表，
+    // 调用方可结合 QScriptContext::backtrace() 自行获取。
     return QStringList();
 }
 

@@ -172,6 +172,14 @@ public:
     JSRuntime *runtime() const { return m_rt; }
     JSContext *ctx() const { return m_ctx; }
 
+    // 由 scriptDebugTrace 在语句边界（OP_debug）调用，记录最近执行到的位置。
+    // QuickJS 的异常对象本身不带行号，uncaughtExceptionLineNumber() 靠它实现。
+    void setCurrentPosition(int line, int column)
+    {
+        m_currentLine = line;
+        m_currentColumn = column;
+    }
+
     // 中断标志，用于打断执行
     std::atomic_int interrupt_flag{0};
 
@@ -204,6 +212,8 @@ private:
     JSRuntime *m_rt{nullptr};
     JSContext *m_ctx{nullptr};
     QScriptEngineAgent *m_agent{nullptr};
+    int m_currentLine{-1};    // 最近执行的语句行号（1 基），-1 表示未知
+    int m_currentColumn{-1};  // 最近执行的语句列号（1 基），-1 表示未知
     JSClassID m_qobjectClassId{0};
     std::atomic<int> m_evalCount{0};
     struct NativeFunctionEntry {
