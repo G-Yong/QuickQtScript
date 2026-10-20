@@ -169,6 +169,12 @@ static bool detectModuleSyntax(const QByteArray &code)
     return false;
 }
 
+// 显示无法运行到当前行号的具体信息
+static QString runToLineWarningText(int requestedLine)
+{
+    return QString::fromWCharArray(L"无法运行到当前指定行号：%1").arg(requestedLine);
+}
+
 // 异步处理回调函数
 void QScriptEngine::promiseRejectionTracker(JSContext *ctx, JSValueConst promise,
                              JSValueConst reason,
@@ -568,6 +574,9 @@ static int custom_interrupt_handler(JSRuntime *rt, void *opaque)
         return 1;
 
     engine->advanceExecutionRevision();
+    // 宿主可为特定运行模式设置连续执行上限；主动停止优先于上限提示
+    if (!std::atomic_load(&engine->interrupt_flag) && engine->consumeExecutionCheck())
+        return 1;
     return std::atomic_load(&engine->interrupt_flag) ? 1 : 0;
 }
 
@@ -604,11 +613,12 @@ static int scriptDebugTrace(
         return -1; // 触发 QuickJS 字节码循环中的 goto exception
     }
 
-    // 如果设置了 agent，则转发 agent 的回调
-    QScriptEngineAgent *agent = engine->agent();
-    if (!agent)
-        return 0;
-
+    // QuickJS 先结束快进状态，目标行随后的原生调用才能按正常运行模式重新判定
+    const bool reached = JS_RunToLineReached(ctx, line);
+    // 定位上限到目标即结束；即使没有 Agent 也不能继续限制目标后的普通执行
+    // 控制器的目标暂停回调随后按运行模式设置新的上限
+    if (reached)
+        engine->setExecutionCheckLimit(0);
     // Convert atoms to C strings (valid only for the duration of this callback)
     const char *fileNameStr = JS_AtomToCString(ctx, fileName);
     const char *funcNameStr = JS_AtomToCString(ctx, funcName);
@@ -622,6 +632,14 @@ static int scriptDebugTrace(
             if (b) JS_FreeCString(ctx, b);
         }
     } guard{ctx, fileNameStr, funcNameStr};
+
+    // 即使没有调试 Agent 也要记录位置，原生过滤器依赖真实文件和行号判断调用资格
+    engine->setNativeCallPosition(fileNameStr ? QString::fromUtf8(fileNameStr) : QString(), line);
+
+    // 如果设置了 agent，则转发 agent 的回调
+    QScriptEngineAgent *agent = engine->agent();
+    if (!agent)
+        return 0;
 
     int scriptId = agent->scriptId(fileNameStr ? QString::fromUtf8(fileNameStr) : QString());
 
@@ -650,13 +668,28 @@ static int scriptDebugTrace(
     if(1)
     {
         // 不能每次都调用，要行列号变化才调用
-        if(agent->isPosChanged(line, col))
+        // 定位阶段仍维护调用栈和原生调用位置，但不触发控制器的普通逐行处理
+        if((agent->isPosChanged(line, col) || reached) &&
+           (reached || !engine->isFastForwarding()))
         {
+            // 先判断是不是命中了指定行号
+            if (reached) {
+                agent->runToLineTargetReached(scriptId, line, col);
+            }
             // qDebug() << "script id:" << scriptId << fileName << line << col;
             agent->positionChange(scriptId, line, col);
         }
     }
 
+    // positionChange 可能阻塞等待；停止会先设置中断标志，再唤醒该等待
+    // 回调返回后须重新检查中断，确保停止时不执行目标行
+    if (engine->interrupt_flag.load()) {
+        JS_ThrowInternalError(ctx, "interrupted");
+        JSValue exception = JS_GetException(ctx);
+        JS_SetUncatchableError(ctx, exception);
+        JS_Throw(ctx, exception);
+        return -1;
+    }
     return 0;
 }
 
@@ -700,7 +733,9 @@ static JSValue nativeFunctionShim(JSContext *ctx,
     // detect whether function was called as constructor
     bool calledAsCtor = JS_IsConstructor(ctx, this_val);
     qctx.setCalledAsConstructor(calledAsCtor);
-    QScriptValue res = func(&qctx, engine, arg);
+    // 在进入注册的 C++ 函数前完成过滤，拒绝时返回宿主提供的替代值且不产生业务副作用
+    const auto decision = engine->filterNativeCall(magic, &qctx);
+    QScriptValue res = decision.execute ? func(&qctx, engine, arg) : decision.replacement;
 
     // 退出函数
     if(agent != nullptr)
@@ -885,6 +920,9 @@ QScriptEngine::~QScriptEngine()
         // }
     }
 
+    // 入口函数和过滤器捕获的脚本值必须在 JSContext 销毁前释放
+    m_entryFunction = QScriptValue();
+    m_nativeCallFilter = {};
     // 清理模块系统
     m_moduleRegistry.clear();
     m_loadedModules.clear(); // 清空缓存（QuickJS 会自动释放模块）
@@ -958,6 +996,33 @@ QSharedPointer<QScriptEngine::HeartbeatState> QScriptEngine::heartbeatState() co
     return m_heartbeatState;
 }
 
+void QScriptEngine::setExecutionCheckLimit(int checks)
+{
+    m_executionCheckLimit = checks;
+    m_executionChecksRemaining = checks;
+    m_executionCheckLimitExceeded = false;
+}
+
+void QScriptEngine::resetExecutionCheckLimit()
+{
+    m_executionChecksRemaining = m_executionCheckLimit;
+}
+
+bool QScriptEngine::consumeExecutionCheck()
+{
+    if (m_executionCheckLimit <= 0)
+        return false;
+    if (--m_executionChecksRemaining > 0)
+        return false;
+    m_executionCheckLimitExceeded = true;
+    return true;
+}
+
+bool QScriptEngine::executionCheckLimitExceeded() const
+{
+    return m_executionCheckLimitExceeded;
+}
+
 void QScriptEngine::setAgent(QScriptEngineAgent *agent)
 {
     m_agent = agent;
@@ -966,6 +1031,12 @@ void QScriptEngine::setAgent(QScriptEngineAgent *agent)
 QScriptEngineAgent *QScriptEngine::agent() const
 {
     return m_agent;
+}
+
+void QScriptEngine::pauseCheckpoint()
+{
+    if (m_agent)
+        m_agent->pauseCheckpoint();
 }
 
 void QScriptEngine::collectGarbage()
@@ -978,6 +1049,112 @@ QScriptContext *QScriptEngine::currentContext() const
 {
     // QScriptContext
     return mCurCtx;
+}
+
+QScriptEngine::RunToLineInfo QScriptEngine::resolveRunToLine(const QString &program,
+                                                             const QString &fileName,
+                                                             int requestedLine)
+{
+    RunToLineInfo info;
+    if (!m_ctx || requestedLine <= 0)
+        return info;
+
+    QByteArray ba = program.toUtf8();
+    QByteArray fnba = fileName.toUtf8();
+    const char *fn = fileName.isEmpty() ? "<eval>" : fnba.constData();
+
+    JSEvalOptions options = {};
+    options.version = JS_EVAL_OPTIONS_VERSION;
+    options.eval_flags = detectModuleSyntax(ba) ? JS_EVAL_TYPE_MODULE : JS_EVAL_TYPE_GLOBAL;
+    options.eval_flags |= JS_EVAL_FLAG_COMPILE_ONLY;
+    options.filename = fn;
+    options.line_num = 1;
+
+    JSValue compiled = JS_Eval2RunToLineCompile(m_ctx,
+                                                ba.constData(),
+                                                ba.size(),
+                                                &options);
+    if (JS_IsException(compiled)) {
+        JSValue exception = JS_GetException(m_ctx);
+        info.warningText = QScriptValue(m_ctx, exception, const_cast<QScriptEngine*>(this)).toString();
+        JS_FreeValue(m_ctx, exception);
+        return info;
+    }
+
+    JSRunToLineResolveResult result = {};
+    if (JS_ResolveRunToLine(m_ctx, compiled, requestedLine, &result) == 0 &&
+        result.resolved_line > 0) {
+        info.enabled = true;
+        info.resolvedLine = result.resolved_line;
+        if (result.exact_match == 0) {
+            info.warningText = runToLineWarningText(requestedLine);
+        }
+    } else {
+        info.warningText = runToLineWarningText(requestedLine);
+    }
+
+    JS_FreeValue(m_ctx, compiled);
+    return info;
+}
+
+void QScriptEngine::setRunToLineInfo(const RunToLineInfo &info)
+{
+    m_runToLineInfo = info;
+}
+
+void QScriptEngine::clearRunToLineInfo()
+{
+    m_runToLineInfo = RunToLineInfo();
+}
+
+JSValue QScriptEngine::evaluateRunToLine(const QString &program,
+                                         const QString &fileName,
+                                         int lineNumber,
+                                         bool isModule,
+                                         const RunToLineInfo &info)
+{
+    QByteArray ba = program.toUtf8();
+    QByteArray fnba = fileName.toUtf8();
+    const char *fn = fileName.isEmpty() ? "<eval>" : fnba.constData();
+
+    JSEvalOptions compileOptions = {};
+    compileOptions.version = JS_EVAL_OPTIONS_VERSION;
+    compileOptions.eval_flags = isModule ? JS_EVAL_TYPE_MODULE : JS_EVAL_TYPE_GLOBAL;
+    compileOptions.eval_flags |= JS_EVAL_FLAG_COMPILE_ONLY;
+    compileOptions.filename = fn;
+    compileOptions.line_num = (lineNumber > 0) ? lineNumber : 1;
+
+    JSValue compiled = JS_Eval2RunToLineCompile(m_ctx,
+                                                ba.constData(),
+                                                ba.size(),
+                                                &compileOptions);
+    if (JS_IsException(compiled))
+        return compiled;
+
+    if (JS_EnableRunToLine(m_ctx, compiled, info.resolvedLine) < 0) {
+        JS_FreeValue(m_ctx, compiled);
+        JS_ThrowInternalError(m_ctx, "run-to-line setup failed");
+        return JS_EXCEPTION;
+    }
+
+    /* Evaluation owns the compiled value while QuickJS stores a non-owning
+       pointer to its target bytecode. Clearing the context state on every
+       exit path prevents that pointer from surviving compiled. */
+    struct RunToLineGuard {
+        JSContext *ctx;
+        JSValue compiled;
+        ~RunToLineGuard()
+        {
+            JS_ClearRunToLine(ctx);
+            JS_FreeValue(ctx, compiled);
+        }
+    } guard{m_ctx, compiled};
+
+    // 让根脚本正常快进到真实调用点
+    // 这样在函数体里停住后，后续单步才能自然回到原始调用行继续执行
+    JSValue val = JS_EvalFunction(m_ctx, JS_DupValue(m_ctx, compiled));
+
+    return val;
 }
 
 QScriptValue QScriptEngine::evaluate(const QString &program, const QString &fileName, int lineNumber)
@@ -1011,9 +1188,11 @@ QScriptValue QScriptEngine::evaluate(const QString &program, const QString &file
     QByteArray fnba = fileName.toUtf8();
     const char *fn  = fileName.isEmpty() ? "<eval>" : fnba.constData();
     JSValue val;
+    RunToLineInfo runToLineInfo = m_runToLineInfo;
+    clearRunToLineInfo();
 
     // 使用带有flag的eval调用函数
-    JSEvalOptions options;
+    JSEvalOptions options = {};
     options.version    = JS_EVAL_OPTIONS_VERSION;
     bool isModule;
     // isModule = JS_DetectModule(ba.constData(), ba.size()); // 等待官方完善 JS_DetectModule
@@ -1026,7 +1205,12 @@ QScriptValue QScriptEngine::evaluate(const QString &program, const QString &file
     // 这是加载外部的模块（js实现）
     // JS_SetModuleLoaderFunc(m_rt, nullptr, js_module_loader_qt, nullptr);
 
-    val = JS_Eval2(m_ctx, ba.constData(), ba.size(), &options);
+    // 判断是否开启指定行运行功能
+    if (runToLineInfo.enabled && runToLineInfo.resolvedLine > 0) {
+        val = evaluateRunToLine(program, fileName, lineNumber, isModule, runToLineInfo);
+    } else {
+        val = JS_Eval2(m_ctx, ba.constData(), ba.size(), &options);
+    }
     // 如果是JS_EVAL_TYPE_GLOBAL执行脚本, 发生错误时val会直接返回异常，所以不会进入下面的判断
 //     if (!JS_IsException(val))
 //     {
@@ -1495,6 +1679,166 @@ QScriptValue QScriptEngine::registerNativeFunction(FunctionWithArgSignature sign
     return qVal;
 }
 
+// 注册信息随原生入口保存，脚本别名及 name 属性不能改变指令类别
+QScriptValue QScriptEngine::newFunction(FunctionWithArgSignature signature, void *arg,
+                                        const NativeFunctionOptions &options)
+{
+    auto value = newFunction(signature, arg);
+    std::lock_guard<std::mutex> lock(m_nativeFunctionsMutex);
+    m_nativeFunctions.back().options = options;
+    return value;
+}
+
+void QScriptEngine::setNativeCallFilter(NativeCallFilter filter)
+{
+    // 过滤器由宿主按引擎会话安装，QScriptEngine 只负责在每个原生入口统一调用
+    m_nativeCallFilter = std::move(filter);
+}
+
+void QScriptEngine::setEntryFunction(const QScriptValue &entry)
+{
+    // 保存真实入口对象用于调用帧身份比较，不使用函数名以免别名和同名函数误判
+    m_entryFunction = entry;
+}
+
+void QScriptEngine::setNativeCallPosition(const QString &fileName, int line)
+{
+    // OP_debug 总在后续语句调用前更新位置，因此这里保存的是当前原生调用所属源码位置
+    m_nativeFileName = fileName;
+    m_nativeLine = line;
+}
+
+bool QScriptEngine::isFastForwarding() const
+{
+    return JS_IsRunToLineFastForwarding(m_ctx);
+}
+
+QScriptEngine::NativeCallDecision QScriptEngine::filterNativeCall(int index, QScriptContext *context)
+{
+    NativeCallInfo info;
+    {
+        // 原生表可能被其他注册流程访问，只在复制稳定元数据时短暂持锁
+        std::lock_guard<std::mutex> lock(m_nativeFunctionsMutex);
+        info.options = m_nativeFunctions[index].options;
+    }
+    // 默认原生函数在定位期保持旧版跳过语义，只有显式声明的入口才交给宿主细分
+    if (isFastForwarding() && !info.options.enterDuringRunToLine)
+        return {false, QScriptValue()};
+    if (!m_nativeCallFilter)
+        return {};
+    // QuickJS 返回当前最近的字节码调用帧，原生桥自身不会被误当作 Main
+    JSValueConst caller = JS_RunToLineCurrentFunction(m_ctx);
+    info.fileName = m_nativeFileName;
+    info.line = m_nativeLine;
+    info.directEntryFrame = m_entryFunction.isFunction() &&
+        JS_VALUE_GET_TAG(caller) == JS_TAG_OBJECT &&
+        JS_VALUE_GET_PTR(caller) == JS_VALUE_GET_PTR(m_entryFunction.rawValue());
+    return m_nativeCallFilter(context, info);
+}
+
+// 定义加载与入口调用共用目标字节码的存活期，不能由中间 evaluate 提前清除定位状态
+QScriptValue QScriptEngine::evaluateWithEntry(const QList<ScriptSource> &sources,
+                                             const QString &entryName, const QString &targetFileName)
+{
+    // 定位配置只消费一次，整个定义加载和入口调用过程共享同一份 QuickJS 状态
+    const auto runToLineInfo = m_runToLineInfo;
+    clearRunToLineInfo();
+    // 清除上一轮执行状态；编译本身不计入定位执行量
+    setExecutionCheckLimit(0);
+    interrupt_flag.store(0);
+    // 上次异常供调用方读取，新会话开始时清除，避免首个调试点再次抛出旧异常
+    JS_FreeValue(m_ctx, JS_GetException(m_ctx));
+    clearUncaughtPromiseRejections();
+    m_evalCount.fetch_add(1);
+    // 先编译全部文件并保留字节码对象，QuickJS 的目标指针在 JS_ClearRunToLine 前必须持续有效
+    QList<JSValue> compiledScripts;
+    struct RunToLineGuard {
+        QScriptEngine *engine;
+        QList<JSValue> &compiledScripts;
+        ~RunToLineGuard() {
+            // target 借用 compiledScripts 内的字节码，必须先清空定位指针再释放编译结果
+            JS_ClearRunToLine(engine->ctx());
+            // 所有退出路径都撤销计数，但保留超限标志供宿主识别本次失败原因
+            engine->m_executionCheckLimit = 0;
+            engine->m_executionChecksRemaining = 0;
+            engine->setEntryFunction(QScriptValue());
+            for (auto value : compiledScripts)
+                JS_FreeValue(engine->ctx(), value);
+        }
+    } runToLineGuard{this, compiledScripts};
+    JSValue result = JS_UNDEFINED;
+    int targetScriptIndex = -1;
+    // 编译阶段不执行顶层代码，同时登记脚本 ID，保持 Agent 文件名映射与普通 evaluate 一致
+    for (const auto &source : sources) {
+        mFileNameBuffer.append(source.fileName);
+        if (agent())
+            agent()->scriptLoad(mFileNameBuffer.size() - 1, source.program, source.fileName, 1);
+        QByteArray code = source.program.toUtf8(), name = source.fileName.toUtf8();
+        JSEvalOptions options{};
+        options.version = JS_EVAL_OPTIONS_VERSION;
+        options.eval_flags = JS_EVAL_TYPE_GLOBAL | JS_EVAL_FLAG_COMPILE_ONLY;
+        options.filename = name.constData();
+        options.line_num = 1;
+        result = JS_Eval2RunToLineCompile(m_ctx, code.constData(), code.size(), &options);
+        if (JS_IsException(result))
+            break;
+        if (source.fileName == targetFileName)
+            targetScriptIndex = compiledScripts.size();
+        compiledScripts.append(result);
+        result = JS_UNDEFINED;
+    }
+    // 目标只在指定文件中解析；脚本函数可探查，注册的 C++ 指令仍统一经过宿主过滤
+    if (!JS_IsException(result) && runToLineInfo.enabled) {
+        if (targetScriptIndex < 0 ||
+            JS_EnableRunToLine(m_ctx, compiledScripts[targetScriptIndex], runToLineInfo.resolvedLine) < 0)
+            result = JS_ThrowInternalError(m_ctx, "run-to-line target unavailable");
+        else {
+            JS_SetRunToLineNativeBridge(m_ctx, nativeFunctionShim);
+            // 定位和模式2共用中断计数；100次回调是独立的内部上限，不是字节码数或秒数
+            // 每次新定位重新计数，命中目标或本轮退出时撤销，不受 IdleLimit=0 影响
+            constexpr int runToLineCheckLimit = 100;
+            setExecutionCheckLimit(runToLineCheckLimit);
+        }
+    }
+    // 开启定位后再执行所有文件定义，避免定义阶段的原生副作用绕过快进过滤
+    if (!JS_IsException(result)) {
+        for (auto value : compiledScripts) {
+            JS_FreeValue(m_ctx, result);
+            result = JS_EvalFunction(m_ctx, JS_DupValue(m_ctx, value));
+            if (JS_IsException(result))
+                break;
+        }
+    }
+    // 所有定义加载完成后获取真实入口对象，调用帧身份也以该对象为准
+    if (!JS_IsException(result)) {
+        JS_FreeValue(m_ctx, result);
+        setEntryFunction(globalObject().property(entryName));
+        result = JS_Call(m_ctx, m_entryFunction.rawValue(), globalObject().rawValue(), 0, nullptr);
+    }
+    // Main 正常返回但快进仍未结束，说明实际控制流没有抵达解析出的目标调试点
+    if (!JS_IsException(result) && runToLineInfo.enabled && isFastForwarding()) {
+        JS_FreeValue(m_ctx, result);
+        // 正常结束仍未命中时只能给出排查建议，不能断言具体失败原因
+        // 第三条建议暂不展示：目标是否位于空集合的循环中，或使用了无法识别的动态调用方式
+        result = JS_ThrowInternalError(m_ctx,
+            "无法到达当前指定行处，程序已结束但未到达目标位置\n"
+            "请检查：\n"
+            "1. 目标函数是否由 Main 直接或间接调用\n"
+            "2. 是否在到达目标前提前返回或退出");
+    }
+    QScriptValue value(m_ctx, result, this);
+    if (JS_IsException(result) && !interrupt_flag.load()) {
+        JSValue exception = JS_GetException(m_ctx);
+        value = QScriptValue(m_ctx, exception, this);
+        JS_Throw(m_ctx, exception);
+        if (agent()) agent()->exceptionThrow(-1, value, false);
+    }
+    if (agent()) agent()->checkFunctionPair(-1, value);
+    JS_FreeValue(m_ctx, result);
+    m_evalCount.fetch_sub(1);
+    return value;
+}
+
 void QScriptEngine::clearUncaughtPromiseRejections()
 {
     m_uncaughtPromiseRejections.clear();
@@ -1521,6 +1865,8 @@ JSValue QScriptEngine::awaitPromise(JSValue promise, bool isModule)
         JSContext *ctx1;
         int ret;
         do {
+            // pending job 可以持续产生新 job，不能只在外层循环检查一次。
+            pauseCheckpoint();
             ret = JS_ExecutePendingJob(m_rt, &ctx1);
             if (ret <= 0) {
                 // Job执行出错，已经通过tracker记录

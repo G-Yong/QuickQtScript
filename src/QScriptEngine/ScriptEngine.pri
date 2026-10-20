@@ -1,5 +1,9 @@
 QT += core
 
+# 仅显式引入当前 ScriptEngine.pri 的项目开放 QuickQtScript 扩展接口
+# 使用 Qt 自带 QT += script 的项目不会定义该宏，也不会依赖当前实现
+DEFINES += QUICKQTSCRIPT_ENGINE_EXTENSIONS
+
 # 之前把xxx xxx.h xxx.cpp（比如QScriptEngine QScriptEngine.h QScriptEngine.cpp）放在一起时，会出现下面的问题
 # 包含此项目后，在linux下编译时，可能会出现 XXXX: No such file or directory的问题
 # 查看编译输出可以看到，主要是因为在编译scriptEngine文件夹中的某些cpp文件时，编译器直接试图将其编译成可执行文件

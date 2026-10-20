@@ -62,6 +62,8 @@ public:
 
     virtual void positionChange(qint64 scriptId,
                                 int lineNumber, int columnNumber);
+    virtual void runToLineTargetReached(qint64 scriptId,
+                                        int lineNumber, int columnNumber);
 
     virtual void exceptionThrow(qint64 scriptId,
                                 const QScriptValue &exception,
@@ -74,9 +76,7 @@ public:
     //                            const QVariant &argument = QVariant());
 
 
-    PosInfo currentPos(){
-        return mCurPos;
-    }
+    PosInfo currentPos();
 
     // 调试控制接口
     void setDebugMode(DebugMode mode);
@@ -95,7 +95,10 @@ public:
     void stepInto();               // 单步进入
     void stepOver();               // 单步跳过
     void stepOut();                // 单步跳出
-    void pause();                  // 暂停执行
+    // 仅 Running -> Requested 转换成功时返回 true；再次点击停止可据此执行终止。
+    bool requestPause();
+    bool isPaused();
+    void pauseCheckpoint() override;
     void stopDebugging();
 
     // 获取当前状态
@@ -105,9 +108,16 @@ signals:
     void posChanged(PosInfo info);
 
 private:
-    // 检查是否应该在当前位置暂停
-    bool shouldPauseAtPosition(qint64 scriptId, int lineNumber, int columnNumber);
-    void waitForContinue();
+    enum class PauseState {
+        Running,
+        Requested,
+        Paused
+    };
+
+    // 以下三个辅助函数都要求调用方已经持有 m_mutex。
+    bool shouldPauseAtPositionLocked(qint64 scriptId, int lineNumber);
+    void resumeExecutionLocked(DebugMode mode);
+    void waitWhilePausedLocked();
 
 private:
     PosInfo mCurPos;
@@ -119,16 +129,17 @@ private:
     int m_stepOutDepth;            // stepOut时记录的函数深度
     int m_currentDepth;            // 当前函数调用深度
 
-    // 当前位置
-    qint64 m_currentScriptId;
-
     // 断点管理
     QList<Breakpoint> m_breakpoints;
 
     // 线程同步
     QMutex m_mutex;
     QWaitCondition m_waitCondition;
-    bool m_paused;
+    // 单一状态机保证暂停请求不会在 Paused 标志设置前被另一个线程误判。
+    PauseState m_pauseState{PauseState::Running};
+
+    // QuickJS 已验证目标函数和目标行；这里只桥接紧随其后的 positionChange。
+    bool m_runToLineStopPending{false};
 
 };
 
