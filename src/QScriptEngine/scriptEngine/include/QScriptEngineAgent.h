@@ -24,6 +24,10 @@ public:
     virtual void functionEntry(qint64 scriptId);
     virtual void functionExit(qint64 scriptId, const QScriptValue &returnValue);
     virtual void positionChange(qint64 scriptId, int lineNumber, int columnNumber);
+    // 仅在 run-to-line 的目标函数帧真正命中目标行时触发
+    virtual void runToLineTargetReached(qint64 scriptId, int lineNumber, int columnNumber);
+    // 供耗时 native 函数调用的协作暂停点；默认 agent 不执行任何操作。
+    virtual void pauseCheckpoint();
     virtual void scriptLoad(qint64 id, const QString &program, const QString &fileName, int baseLineNumber);
     virtual void scriptUnload(qint64 id);
     // virtual bool supportsExtension(QScriptEngineAgent::Extension extension) const;
